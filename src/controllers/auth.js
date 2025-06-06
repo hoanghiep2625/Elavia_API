@@ -168,3 +168,22 @@ export const myInfo = async (req, res) => {
 export const info = async (req, res) => {
   return res.status(200).json(req.user);
 };
+
+
+export const getListUser = async (req, res) => {
+  try {
+    const users = await User.find();
+    return res.status(200).json(users);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+export const getUserById = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    return res.status(200).json(user);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
