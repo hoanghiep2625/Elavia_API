@@ -6,6 +6,13 @@ import {
   getProducts,
   updateProduct,
 } from "../controllers/product.js";
+
+import {
+  getCategories,
+  deleteCategory,
+  getCategoryById
+} from "../controllers/categories.js";
+
 import {
   createProductVariant,
   updateProductVariant,
@@ -35,10 +42,15 @@ router.get("/products/:id", getProductById);
 router.get("/users", getListUser);
 router.get("/users/:id", getUserById);
 
+router.get("/categories", getCategories);
+router.delete("/categories/:id", deleteCategory);
+router.get("/categories/:id", getCategoryById);
+
 router.get("/variants", getProductVariants);
 router.post("/variants", createProductVariant);
 router.patch("/variants/:id", updateProductVariant);
 router.delete("/variants/:id", deleteProductVariant);
 router.get("/variants/:id", getProductVariantById);
+
 
 export default router;
