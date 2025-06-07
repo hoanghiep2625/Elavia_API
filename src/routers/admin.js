@@ -6,13 +6,6 @@ import {
   getProducts,
   updateProduct,
 } from "../controllers/product.js";
-
-import {
-  getCategories,
-  deleteCategory,
-  getCategoryById
-} from "../controllers/categories.js";
-
 import {
   createProductVariant,
   updateProductVariant,
@@ -21,11 +14,25 @@ import {
   getProductVariantById,
 } from "../controllers/productVariant.js";
 import {
+  createCategory,
+  deleteCategory,
+  getCategories,
+  getCategoryById,
+  updateCategory,
+} from "../controllers/categories.js";
+
+import { getListUser, getUserById } from "../controllers/auth.js";
+
+import {
   checkAuthAdmin,
   getAdminProfile,
 } from "../middlewares/checkAuthAdmin.js";
-
-import { getListUser, getUserById } from "../controllers/auth.js";
+import { getAllOrders, getOrderById, getOrders } from "../controllers/order.js";
+import {
+  getStats,
+  getUserStats,
+  getProductStats,
+} from "../controllers/stats.js";
 
 const router = Router();
 
@@ -43,7 +50,9 @@ router.get("/users", getListUser);
 router.get("/users/:id", getUserById);
 
 router.get("/categories", getCategories);
+router.post("/categories", createCategory);
 router.delete("/categories/:id", deleteCategory);
+router.patch("/categories/:id", updateCategory);
 router.get("/categories/:id", getCategoryById);
 
 router.get("/variants", getProductVariants);
@@ -52,5 +61,11 @@ router.patch("/variants/:id", updateProductVariant);
 router.delete("/variants/:id", deleteProductVariant);
 router.get("/variants/:id", getProductVariantById);
 
+router.get("/orders/:userId", getOrders); //lấy order của user
+router.get("/orders", getAllOrders);
+router.get("/orders/:id", getOrderById);
 
+router.get("/stats", getStats);
+router.get("/stats/users", getUserStats);
+router.get("/stats/products", getProductStats);
 export default router;

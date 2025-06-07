@@ -17,7 +17,41 @@ const categorySchema = z.object({
     .min(1, "Cấp độ phải là số nguyên lớn hơn hoặc bằng 1")
     .max(3, "Cấp độ tối đa là 3"),
 });
+export const createCategory = async (req, res) => {
+  try {
+    const result = categorySchema.safeParse(req.body);
+    if (!result.success) {
+      const errors = result.error.errors.map((err) => err.message);
+      return res.status(400).json({ errors });
+    }
 
+    const { parentId, level } = result.data;
+    if (parentId) {
+      const parent = await Category.findById(parentId);
+      if (!parent)
+        return res.status(400).json({ message: "Danh mục cha không tồn tại" });
+      if (parent.level >= 3)
+        return res
+          .status(400)
+          .json({ message: "Không thể tạo danh mục con cho cấp 3" });
+      if (level !== parent.level + 1)
+        return res
+          .status(400)
+          .json({ message: "Level phải lớn hơn level của parentId 1 đơn vị" });
+    } else if (level !== 1) {
+      return res
+        .status(400)
+        .json({ message: "Danh mục không có parentId phải có level là 1" });
+    }
+
+    const category = await Category.create(result.data);
+    return res.status(201).json(category);
+  } catch (error) {
+    return res.status(400).json({
+      message: error.message,
+    });
+  }
+};
 export const getCategories = async (req, res) => {
   try {
     const { _sort = "level", _order = "asc", level, parentId } = req.query;
@@ -72,6 +106,60 @@ export const deleteCategory = async (req, res) => {
     await Category.findByIdAndDelete(req.params.id);
     return res.status(200).json({
       message: "Xóa danh mục thành công",
+      data: category,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      message: error.message,
+    });
+  }
+};
+export const updateCategory = async (req, res) => {
+  try {
+    const result = categorySchema.partial().safeParse(req.body);
+    if (!result.success) {
+      const errors = result.error.errors.map((err) => err.message);
+      return res.status(400).json({ errors });
+    }
+
+    const { parentId, level } = result.data;
+
+    if (parentId !== undefined || level !== undefined) {
+      if (parentId) {
+        const parent = await Category.findById(parentId);
+        if (!parent) {
+          return res
+            .status(400)
+            .json({ message: "Danh mục cha không tồn tại" });
+        }
+        if (parent.level >= 3) {
+          return res
+            .status(400)
+            .json({ message: "Không thể tạo danh mục con cho cấp 3" });
+        }
+        if (level !== undefined && level !== parent.level + 1) {
+          return res.status(400).json({
+            message: "Level phải lớn hơn level của parentId 1 đơn vị",
+          });
+        }
+      } else if (level !== undefined && level !== 1) {
+        return res
+          .status(400)
+          .json({ message: "Danh mục không có parentId phải có level là 1" });
+      }
+    }
+
+    const category = await Category.findByIdAndUpdate(
+      req.params.id,
+      result.data,
+      { new: true }
+    );
+    if (!category) {
+      return res.status(404).json({ message: "Danh mục không tồn tại" });
+    }
+
+    return res.status(200).json({
+      message: "Cập nhật danh mục thành công",
       data: category,
     });
   } catch (error) {
