@@ -17,6 +17,7 @@ const categorySchema = z.object({
     .min(1, "Cấp độ phải là số nguyên lớn hơn hoặc bằng 1")
     .max(3, "Cấp độ tối đa là 3"),
 });
+
 export const createCategory = async (req, res) => {
   try {
     const result = categorySchema.safeParse(req.body);
@@ -74,7 +75,6 @@ export const getCategories = async (req, res) => {
     });
   }
 };
-
 export const getCategoryById = async (req, res) => {
   try {
     const category = await Category.findById(req.params.id);
@@ -88,7 +88,6 @@ export const getCategoryById = async (req, res) => {
     });
   }
 };
-
 export const deleteCategory = async (req, res) => {
   try {
     const category = await Category.findById(req.params.id);
@@ -107,6 +106,40 @@ export const deleteCategory = async (req, res) => {
     return res.status(200).json({
       message: "Xóa danh mục thành công",
       data: category,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      message: error.message,
+    });
+  }
+};
+export const getParentCategories = async (req, res) => {
+  try {
+    const categoryId = req.params.id;
+    const category = await Category.findById(categoryId);
+
+    if (!category) {
+      return res.status(404).json({ message: "Danh mục không tồn tại" });
+    }
+
+    // Dùng recursive để lấy danh mục cha
+    let parentCategories = [];
+    let currentCategory = category;
+
+    // Lặp lại cho đến khi không còn parentId
+    while (currentCategory.parentId) {
+      const parentCategory = await Category.findById(currentCategory.parentId);
+      if (!parentCategory) {
+        return res.status(400).json({ message: "Danh mục cha không tồn tại" });
+      }
+      parentCategories.push(parentCategory);
+      currentCategory = parentCategory;
+    }
+
+    // Danh mục cha cuối cùng là cấp 1
+    parentCategories.reverse(); // Đảo lại để cha cấp 1 là phần đầu tiên
+    return res.status(200).json({
+      data: parentCategories,
     });
   } catch (error) {
     return res.status(400).json({

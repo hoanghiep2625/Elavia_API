@@ -1,18 +1,29 @@
+import ngrok from "@ngrok/ngrok";
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
-import cookieParser from "cookie-parser";
-
-import adminRouter from "./routers/admin.js";
+import productRouter from "./routers/product.js";
 import authRouter from "./routers/auth.js";
+import categoryRouter from "./routers/categories.js";
+import adminRouter from "./routers/admin.js";
+import cookieParser from "cookie-parser";
+import cartRouter from "./routers/cart.js";
+import paymentRouter from "./routers/payment.js";
+import productVariantRouter from "./routers/productVariant.js";
+import recentlyViewed from "./routers/recentlyViewed.js";
+import wishList from "./routers/wishList.js";
 
 dotenv.config();
 
 const app = express();
 app.use(
   cors({
-    origin: true,
+    origin: [
+      "http://localhost:5174",
+      "http://localhost:5173",
+      "https://elavia.tahoanghiep.com",
+    ],
     credentials: true,
   })
 );
@@ -24,7 +35,10 @@ const connectDB = async () => {
     if (!process.env.MONGO_URI) {
       throw new Error("MONGO_URI is not defined!");
     }
-    await mongoose.connect(process.env.MONGO_URI);
+    await mongoose.connect(process.env.MONGO_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
     console.log("🔗 Connected to MongoDB");
   } catch (error) {
     console.error("❌ MongoDB Connection Error:", error);
@@ -39,8 +53,15 @@ connectDB();
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
 
-app.use("/api/admin", adminRouter);
+app.use("/api/products", productRouter);
+app.use("/api/product-variants", productVariantRouter);
 app.use("/api/auth", authRouter);
+app.use("/api/categories", categoryRouter);
+app.use("/api/admin", adminRouter);
+app.use("/api/cart", cartRouter);
+app.use("/api/orders", paymentRouter);
+app.use("/api/recently-viewed", recentlyViewed);
+app.use("/api/wishlist", wishList);
 
 // const PORT = 2625;
 // app.listen(PORT, async () => {

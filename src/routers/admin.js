@@ -68,4 +68,5 @@ router.get("/orders/:id", getOrderById);
 router.get("/stats", getStats);
 router.get("/stats/users", getUserStats);
 router.get("/stats/products", getProductStats);
+
 export default router;

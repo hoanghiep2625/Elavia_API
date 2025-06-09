@@ -3,6 +3,8 @@ import User from "../models/user.js";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import dotenv from "dotenv";
+import mongoose from "mongoose";
+import RecentlyViewed from "../models/recentlyViewed.js";
 
 dotenv.config();
 const locationSchema = z.object({
@@ -169,7 +171,6 @@ export const info = async (req, res) => {
   return res.status(200).json(req.user);
 };
 
-
 export const getListUser = async (req, res) => {
   try {
     const users = await User.find();
@@ -178,11 +179,161 @@ export const getListUser = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+export const getShippingAddressMainByUserId = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    return res.status(200).json(user.shipping_addresses);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+export const getShippingById = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "Người dùng không tồn tại" });
+    }
 
+    const shipping_address = user.shipping_addresses.find(
+      (address) => address._id.toString() === req.params.id
+    );
+
+    if (!shipping_address) {
+      return res.status(404).json({ message: "Địa chỉ không tồn tại" });
+    }
+
+    return res.status(200).json(shipping_address);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
 export const getUserById = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     return res.status(200).json(user);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+export const addShippingAddress = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    console.log("🚀 ~ addShippingAddress ~ userId:", userId);
+
+    const result = shippingAddressSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({ errors: result.error.format() });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Người dùng không tồn tại" });
+    }
+
+    user.shipping_addresses.push(result.data);
+    await user.save();
+
+    return res.status(200).json({
+      message: "Thêm địa chỉ thành công",
+      data: user.shipping_addresses,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+// Đổi mật khẩu
+export const changePassword = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { oldPassword, newPassword } = req.body;
+
+    if (!oldPassword || !newPassword) {
+      return res
+        .status(400)
+        .json({ message: "Vui lòng cung cấp đầy đủ thông tin" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Người dùng không tồn tại" });
+    }
+
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Mật khẩu cũ không chính xác" });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    return res.status(200).json({ message: "Đổi mật khẩu thành công" });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+// Đổi thông tin người dùng
+export const updateUserInfo = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { first_name, name, phone, date, sex } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Người dùng không tồn tại" });
+    }
+
+    user.first_name = first_name || user.first_name;
+    user.name = name || user.name;
+    user.phone = phone || user.phone;
+    user.date = date || user.date;
+    user.sex = sex || user.sex;
+
+    await user.save();
+
+    return res
+      .status(200)
+      .json({ message: "Cập nhật thông tin thành công", user });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+// Sửa địa chỉ
+export const updateShippingAddress = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { addressId } = req.params;
+    const result = shippingAddressSchema.safeParse(req.body);
+
+    if (!result.success) {
+      return res.status(400).json({ errors: result.error.format() });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Người dùng không tồn tại" });
+    }
+
+    const addressIndex = user.shipping_addresses.findIndex(
+      (addr) => addr._id.toString() === addressId
+    );
+    if (addressIndex === -1) {
+      return res.status(404).json({ message: "Địa chỉ không tồn tại" });
+    }
+
+    user.shipping_addresses[addressIndex] = {
+      ...user.shipping_addresses[addressIndex]._doc,
+      ...result.data,
+    };
+    await user.save();
+
+    return res.status(200).json({
+      message: "Cập nhật địa chỉ thành công",
+      data: user.shipping_addresses,
+    });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
