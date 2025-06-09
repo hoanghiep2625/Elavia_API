@@ -1,4 +1,6 @@
 import mongoose, { Schema } from "mongoose";
+import mongoosePaginate from "mongoose-paginate-v2";
+
 const locationSchema = new Schema(
   {
     id: {
@@ -98,4 +100,8 @@ const registerSchema = new Schema(
   }
 );
 
+registerSchema.plugin(mongoosePaginate);
+
 export default mongoose.model("user", registerSchema);
+
+
