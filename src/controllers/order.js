@@ -132,11 +132,11 @@ export const getAllOrders = async (req, res) => {
 export const getOrders = async (req, res) => {
   try {
     const userEmail = req.user.email;
-    const { page = 1, limit = 10 } = req.query;
+    const { _page = 1, _limit = 10 } = req.query;
 
     const options = {
-      page: parseInt(page),
-      limit: parseInt(limit),
+      page: parseInt(_page),
+      limit: parseInt(_limit),
       populate: {
         path: "items.productVariantId",
         model: "ProductVariant",

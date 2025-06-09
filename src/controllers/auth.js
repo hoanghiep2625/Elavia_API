@@ -173,8 +173,20 @@ export const info = async (req, res) => {
 
 export const getListUser = async (req, res) => {
   try {
-    const users = await User.find();
-    return res.status(200).json(users);
+    const { _page = 1, _limit = 10 } = req.query;
+
+    const options = {
+      page: parseInt(_page),
+      limit: parseInt(_limit),
+      sort: { createdAt: -1 },
+    };
+    const users = await User.paginate({}, options);
+    return res.status(200).json({
+      data: users.docs,
+      totalPages: users.totalPages,
+      currentPage: users.page,
+      total: users.totalDocs,
+    });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
