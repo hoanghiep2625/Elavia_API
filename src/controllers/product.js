@@ -39,6 +39,8 @@ export const getProducts = async (req, res) => {
       _sort = "name",
       _order = "asc",
       categoryId,
+      _name, // tìm theo tên
+      _sku,  // tìm theo sku
     } = req.query;
     const options = {
       page: parseInt(_page),
@@ -48,12 +50,18 @@ export const getProducts = async (req, res) => {
     };
     const query = {};
     if (categoryId) query.categoryId = categoryId;
+    if (_name) {
+      query.name = { $regex: _name, $options: "i" };
+    }
+    if (_sku) {
+      query.sku = { $regex: _sku, $options: "i" }; // tìm sku không phân biệt hoa thường
+    }
     const products = await Product.paginate(query, options);
     return res.status(200).json({
       data: products.docs,
       total: products.totalDocs,
-      currentPage: products.page, // tuỳ, nếu muốn client xài
-      totalPages: products.totalPages, // tuỳ
+      currentPage: products.page,
+      totalPages: products.totalPages,
     });
   } catch (error) {
     return res.status(400).json({

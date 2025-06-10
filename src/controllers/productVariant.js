@@ -100,43 +100,51 @@ export const getProductVariants = async (req, res) => {
       _page = 1,
       _sort = "price",
       _order = "asc",
-      productId,
-      priceMin,
-      priceMax,
-      baseColor,
-      size,
-      stockMin,
-      stockMax,
+      _productId,
+      _priceMin,
+      _priceMax,
+      _baseColor,
+      _baseColors, 
+      _size,
+      _stockMin,
+      _stockMax,
     } = req.query;
 
     // Tạo query lọc
     const query = {};
 
     // Lọc theo productId nếu có
-    if (productId && mongoose.Types.ObjectId.isValid(productId)) {
-      query.productId = new mongoose.Types.ObjectId(productId);
+    if (_productId && mongoose.Types.ObjectId.isValid(_productId)) {
+      query.productId = new mongoose.Types.ObjectId(_productId);
     }
 
     // Lọc theo price (min/max)
-    if (priceMin || priceMax) {
+    if (_priceMin || _priceMax) {
       query.price = {};
-      if (priceMin) query.price.$gte = parseFloat(priceMin);
-      if (priceMax) query.price.$lte = parseFloat(priceMax);
+      if (_priceMin) query.price.$gte = parseFloat(_priceMin);
+      if (_priceMax) query.price.$lte = parseFloat(_priceMax);
     }
 
-    // Lọc theo màu sắc
-    if (baseColor) {
-      query["color.baseColor"] = baseColor;
+    // Lọc theo màu sắc (1 màu hoặc nhiều màu)
+    if (_baseColor) {
+      query["color.baseColor"] = _baseColor;
+    }
+    if (_baseColors) {
+      // _baseColors là chuỗi, ví dụ: "Red,Blue"
+      const colorsArr = Array.isArray(_baseColors)
+        ? _baseColors
+        : _baseColors.split(",");
+      query["color.baseColor"] = { $in: colorsArr };
     }
 
     // Lọc theo size và stock
-    if (size || stockMin || stockMax) {
+    if (_size || _stockMin || _stockMax) {
       query.sizes = { $elemMatch: {} };
-      if (size) query.sizes.$elemMatch.size = size;
-      if (stockMin || stockMax) {
+      if (_size) query.sizes.$elemMatch.size = _size;
+      if (_stockMin || _stockMax) {
         query.sizes.$elemMatch.stock = {};
-        if (stockMin) query.sizes.$elemMatch.stock.$gte = parseInt(stockMin);
-        if (stockMax) query.sizes.$elemMatch.stock.$lte = parseInt(stockMax);
+        if (_stockMin) query.sizes.$elemMatch.stock.$gte = parseInt(_stockMin);
+        if (_stockMax) query.sizes.$elemMatch.stock.$lte = parseInt(_stockMax);
       }
     }
 
@@ -145,7 +153,7 @@ export const getProductVariants = async (req, res) => {
       page: parseInt(_page),
       limit: parseInt(_limit),
       sort: { [_sort]: _order === "desc" ? -1 : 1 },
-      populate: "productId", // Thêm populate nếu cần thiết
+      populate: "productId",
     };
 
     // Lấy dữ liệu phân trang và lọc
