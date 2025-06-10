@@ -173,14 +173,19 @@ export const info = async (req, res) => {
 
 export const getListUser = async (req, res) => {
   try {
-    const { _page = 1, _limit = 10 } = req.query;
+    const { _page = 1, _limit = 10, _email, _phone } = req.query;
+
+    // Tạo query tìm kiếm
+    const query = {};
+    if (_email) query.email = { $regex: _email, $options: "i" };
+    if (_phone) query.phone = { $regex: _phone, $options: "i" };
 
     const options = {
       page: parseInt(_page),
       limit: parseInt(_limit),
       sort: { createdAt: -1 },
     };
-    const users = await User.paginate({}, options);
+    const users = await User.paginate(query, options);
     return res.status(200).json({
       data: users.docs,
       totalPages: users.totalPages,

@@ -100,8 +100,16 @@ export const cancelOrder = async (req, res) => {
 };
 export const getAllOrders = async (req, res) => {
   try {
-    const { _page = 1, _limit = 10 } = req.query;
+    const { _page = 1, _limit = 10, _orderId, _user, _phone, _email, _address } = req.query;
 
+    // Tạo query tìm kiếm
+    const query = {};
+    if (_orderId) query.orderId = { $regex: _orderId, $options: "i" };
+    if (_user) query["user.name"] = { $regex: _user, $options: "i" };
+    if (_phone) query["user.phone"] = { $regex: _phone, $options: "i" };
+    if (_email) query["user.email"] = { $regex: _email, $options: "i" };
+    if (_address) query["user.address"] = { $regex: _address, $options: "i" };
+  
     const options = {
       page: parseInt(_page),
       limit: parseInt(_limit),
@@ -112,7 +120,7 @@ export const getAllOrders = async (req, res) => {
       sort: { createdAt: -1 },
     };
 
-    const result = await Order.paginate({}, options);
+    const result = await Order.paginate(query, options);
 
     if (!result.docs || result.docs.length === 0) {
       return res.status(200).json({ message: "Không có đơn hàng nào" });
@@ -132,7 +140,7 @@ export const getAllOrders = async (req, res) => {
 export const getOrders = async (req, res) => {
   try {
     const userEmail = req.user.email;
-    const { _page = 1, _limit = 10 } = req.query;
+    const { _page = 1, _limit = 10} = req.query;
 
     const options = {
       page: parseInt(_page),
@@ -144,7 +152,7 @@ export const getOrders = async (req, res) => {
       sort: { createdAt: -1 },
     };
 
-    const result = await Order.paginate({ "user.email": userEmail }, options);
+    const result = await Order.paginate({}, options);
 
     if (!result.docs || result.docs.length === 0) {
       return res.status(200).json({ message: "Không có đơn hàng nào" });

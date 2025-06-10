@@ -55,13 +55,14 @@ export const createCategory = async (req, res) => {
 };
 export const getCategories = async (req, res) => {
   try {
-    const { _sort = "level", _order = "asc", level, parentId } = req.query;
+    const { _sort = "level", _order = "asc", _level, _parentId, _name } = req.query;
 
     const sortOptions = { [_sort]: _order === "desc" ? -1 : 1 };
 
     const query = {};
-    if (level) query.level = parseInt(level);
-    if (parentId) query.parentId = parentId;
+    if (_level) query.level = parseInt(_level);
+    if (_parentId) query.parentId = _parentId;
+    if (_name) query.name = { $regex: _name, $options: "i" }; // Tìm kiếm theo tên, không phân biệt hoa thường
 
     const categories = await Category.find(query).sort(sortOptions);
 
