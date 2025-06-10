@@ -100,52 +100,51 @@ export const getProductVariants = async (req, res) => {
       _page = 1,
       _sort = "price",
       _order = "asc",
-      _productId,
-      _priceMin,
-      _priceMax,
-      _baseColor,
-      _baseColors, 
-      _size,
-      _stockMin,
-      _stockMax,
+      productId,
+      priceMin,
+      priceMax,
+      baseColor,
+      size,
+      stockMin,
+      stockMax,
+      _name,
+      _sku, // Thêm trường sku để tìm kiếm
     } = req.query;
 
     // Tạo query lọc
     const query = {};
 
     // Lọc theo productId nếu có
-    if (_productId && mongoose.Types.ObjectId.isValid(_productId)) {
-      query.productId = new mongoose.Types.ObjectId(_productId);
+    if (productId && mongoose.Types.ObjectId.isValid(productId)) {
+      query.productId = new mongoose.Types.ObjectId(productId);
     }
 
     // Lọc theo price (min/max)
-    if (_priceMin || _priceMax) {
+    if (priceMin || priceMax) {
       query.price = {};
-      if (_priceMin) query.price.$gte = parseFloat(_priceMin);
-      if (_priceMax) query.price.$lte = parseFloat(_priceMax);
+      if (priceMin) query.price.$gte = parseFloat(priceMin);
+      if (priceMax) query.price.$lte = parseFloat(priceMax);
     }
 
-    // Lọc theo màu sắc (1 màu hoặc nhiều màu)
-    if (_baseColor) {
-      query["color.baseColor"] = _baseColor;
-    }
-    if (_baseColors) {
-      // _baseColors là chuỗi, ví dụ: "Red,Blue"
-      const colorsArr = Array.isArray(_baseColors)
-        ? _baseColors
-        : _baseColors.split(",");
-      query["color.baseColor"] = { $in: colorsArr };
+    // Lọc theo màu sắc
+    if (baseColor) {
+      query["color.baseColor"] = baseColor;
     }
 
     // Lọc theo size và stock
-    if (_size || _stockMin || _stockMax) {
+    if (size || stockMin || stockMax) {
       query.sizes = { $elemMatch: {} };
-      if (_size) query.sizes.$elemMatch.size = _size;
-      if (_stockMin || _stockMax) {
+      if (size) query.sizes.$elemMatch.size = size;
+      if (stockMin || stockMax) {
         query.sizes.$elemMatch.stock = {};
-        if (_stockMin) query.sizes.$elemMatch.stock.$gte = parseInt(_stockMin);
-        if (_stockMax) query.sizes.$elemMatch.stock.$lte = parseInt(_stockMax);
+        if (stockMin) query.sizes.$elemMatch.stock.$gte = parseInt(stockMin);
+        if (stockMax) query.sizes.$elemMatch.stock.$lte = parseInt(stockMax);
       }
+    }
+
+    // Lọc theo sku (trường của ProductVariant)
+    if (_sku) {
+      query.sku = { $regex: _sku, $options: "i" };
     }
 
     // Cấu hình phân trang và sắp xếp
@@ -153,11 +152,23 @@ export const getProductVariants = async (req, res) => {
       page: parseInt(_page),
       limit: parseInt(_limit),
       sort: { [_sort]: _order === "desc" ? -1 : 1 },
-      populate: "productId",
+      populate: {
+        path: "productId",
+        match: _name
+          ? { name: { $regex: _name, $options: "i" } }
+          : undefined,
+      },
     };
 
     // Lấy dữ liệu phân trang và lọc
-    const result = await ProductVariant.paginate(query, options);
+    let result = await ProductVariant.paginate(query, options);
+
+    // Nếu tìm kiếm theo _name, cần loại bỏ các docs không có productId (do match không khớp)
+    if (_name) {
+      result.docs = result.docs.filter((doc) => doc.productId);
+      result.totalDocs = result.docs.length;
+      result.totalPages = Math.ceil(result.totalDocs / options.limit) || 1;
+    }
 
     return res.status(200).json({
       data: result.docs,
