@@ -21,7 +21,7 @@ import {
   updateCategory,
 } from "../controllers/categories.js";
 
-import { getListUser, getUserById } from "../controllers/auth.js";
+import { getListUser, getUserById, updateUser } from "../controllers/auth.js";
 
 import {
   checkAuthAdmin,
@@ -48,6 +48,7 @@ router.get("/products/:id", getProductById);
 
 router.get("/users", getListUser);
 router.get("/users/:id", getUserById);
+router.patch("/users/:id", updateUser); 
 
 router.get("/categories", getCategories);
 router.post("/categories", createCategory);

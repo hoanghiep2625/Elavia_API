@@ -355,3 +355,29 @@ export const updateShippingAddress = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+export const updateUser = async (req, res) => {
+  try {
+    const { role } = req.body;
+    if (!role) {
+      return res.status(400).json({ message: "Vui lòng cung cấp vai trò mới" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { role },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "Người dùng không tồn tại" });
+    }
+
+    return res.status(200).json({
+      message: "Cập nhật vai trò người dùng thành công",
+      data: user,
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+};
