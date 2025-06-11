@@ -27,16 +27,18 @@ const productVariantSchema = z.object({
 const patchProductVariantSchema = productVariantSchema.partial();
 
 const uploadImageToCloudinary = async (file) => {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      { folder: "products" },
-      (error, result) => {
-        if (error) reject(error);
-        else resolve({ url: result.secure_url, public_id: result.public_id });
-      }
-    );
-    stream.end(file.buffer);
-  });
+  try {
+    const result = await cloudinary.uploader.upload(file.path, {
+      folder: "products",
+    });
+    return {
+      url: result.secure_url,
+      public_id: result.public_id,
+    };
+  } catch (error) {
+    console.error("Upload to Cloudinary failed:", error);
+    throw new Error(`Failed to upload image: ${error.message}`);
+  }
 };
 
 // Tạo biến thể sản phẩm
@@ -162,9 +164,7 @@ export const getProductVariants = async (req, res) => {
       sort: { [_sort]: _order === "desc" ? -1 : 1 },
       populate: {
         path: "productId",
-        match: _name
-          ? { name: { $regex: _name, $options: "i" } }
-          : undefined,
+        match: _name ? { name: { $regex: _name, $options: "i" } } : undefined,
       },
     };
 
@@ -215,21 +215,34 @@ export const getProductVariantById = async (req, res) => {
 // Cập nhật biến thể sản phẩm
 export const updateProductVariant = async (req, res) => {
   upload.fields([
-    { name: "mainImage", maxCount: 1 },
-    { name: "hoverImage", maxCount: 1 },
-    { name: "productImages", maxCount: 10 },
+    { name: "images[main]", maxCount: 1 },
+    { name: "images[hover]", maxCount: 1 },
+    { name: "images[product]", maxCount: 10 },
   ])(req, res, async (err) => {
     if (err) return res.status(400).json({ message: err.message });
 
     try {
+      // Parse FormData
       const formData = parseFormData(req.body);
+      // Điều chỉnh để xử lý deletedImages[] trong FormData
+      formData.deletedImages = req.body["deletedImages[]"]
+        ? Array.isArray(req.body["deletedImages[]"])
+          ? req.body["deletedImages[]"]
+          : [req.body["deletedImages[]"]]
+        : [];
+
       const result = patchProductVariantSchema.safeParse(formData);
       if (!result.success) {
-        const errors = result.error.errors.map((err) => err.message);
+        const errors = result.error.errors.map((err) => ({
+          path: err.path.join("."),
+          message: err.message,
+        }));
         return res.status(400).json({ errors });
       }
 
-      // Lấy dữ liệu hiện tại của variant trước khi update
+      const { deletedImages, ...variantData } = result.data;
+
+      // Lấy variant hiện tại
       const existingVariant = await ProductVariant.findById(req.params.id);
       if (!existingVariant) {
         return res
@@ -237,57 +250,96 @@ export const updateProductVariant = async (req, res) => {
           .json({ message: "Biến thể sản phẩm không tồn tại" });
       }
 
-      const variantData = { ...result.data };
+      // Xử lý xóa ảnh
+      if (Array.isArray(deletedImages) && deletedImages.length > 0) {
+        await Promise.all(
+          deletedImages.map(async (publicId) => {
+            try {
+              await cloudinary.uploader.destroy(publicId);
+              console.log(`Deleted image ${publicId}`);
+            } catch (error) {
+              console.error(`Failed to delete image ${publicId}:`, error);
+            }
+          })
+        );
 
-      // Xử lý hình ảnh
+        // Cập nhật images trong database
+        if (existingVariant.images) {
+          if (
+            existingVariant.images.main?.public_id &&
+            deletedImages.includes(existingVariant.images.main.public_id)
+          ) {
+            existingVariant.images.main = null;
+          }
+          if (
+            existingVariant.images.hover?.public_id &&
+            deletedImages.includes(existingVariant.images.hover.public_id)
+          ) {
+            existingVariant.images.hover = null;
+          }
+          if (existingVariant.images.product) {
+            existingVariant.images.product =
+              existingVariant.images.product.filter(
+                (img) => !deletedImages.includes(img.public_id)
+              );
+          }
+        }
+        // Gán lại images đã cập nhật vào variantData để lưu vào DB
+        variantData.images = existingVariant.images;
+      }
+
+      // Xử lý ảnh mới
+      variantData.images = existingVariant.images || {};
       if (req.files) {
-        // Xử lý ảnh chính
-        if (req.files["mainImage"]) {
-          // Nếu có ảnh cũ, xoá ảnh cũ trên Cloudinary
-          if (existingVariant.images?.main?.public_id) {
+        // Ảnh chính
+        if (req.files["images[main]"]) {
+          if (
+            existingVariant.images?.main?.public_id &&
+            !deletedImages.includes(existingVariant.images.main.public_id)
+          ) {
             await cloudinary.uploader.destroy(
               existingVariant.images.main.public_id
             );
           }
-          variantData.images = existingVariant.images || {};
           variantData.images.main = await uploadImageToCloudinary(
-            req.files["mainImage"][0]
+            req.files["images[main]"][0]
           );
         }
-        // Xử lý ảnh hover
-        if (req.files["hoverImage"]) {
-          if (existingVariant.images?.hover?.public_id) {
+
+        // Ảnh hover
+        if (req.files["images[hover]"]) {
+          if (
+            existingVariant.images?.hover?.public_id &&
+            !deletedImages.includes(existingVariant.images.hover.public_id)
+          ) {
             await cloudinary.uploader.destroy(
               existingVariant.images.hover.public_id
             );
           }
-          variantData.images = existingVariant.images || {};
           variantData.images.hover = await uploadImageToCloudinary(
-            req.files["hoverImage"][0]
+            req.files["images[hover]"][0]
           );
         }
-        // Xử lý ảnh product (cho mảng nhiều ảnh)
-        if (req.files["productImages"]) {
-          // Nếu bạn muốn thay thế toàn bộ mảng ảnh product:
-          if (
-            existingVariant.images?.product &&
-            existingVariant.images.product.length
-          ) {
-            for (const img of existingVariant.images.product) {
-              if (img.public_id) {
-                await cloudinary.uploader.destroy(img.public_id);
-              }
-            }
-          }
-          variantData.images = existingVariant.images || {};
-          // Upload tất cả ảnh mới, tạo mảng các đối tượng chứa { url, public_id }
-          variantData.images.product = await Promise.all(
-            req.files["productImages"].map(uploadImageToCloudinary)
+
+        // Ảnh sản phẩm
+        if (req.files["images[product]"]) {
+          // Chỉ thêm ảnh mới, không xóa toàn bộ ảnh cũ trừ khi có trong deletedImages
+          variantData.images.product = existingVariant.images.product
+            ? existingVariant.images.product.filter(
+                (img) => !deletedImages.includes(img.public_id)
+              )
+            : [];
+          const newImages = await Promise.all(
+            req.files["images[product]"].map(uploadImageToCloudinary)
           );
+          variantData.images.product = [
+            ...variantData.images.product,
+            ...newImages,
+          ];
         }
       }
 
-      // Lọc các field cần update (chỉ update field không undefined)
+      // Lọc các field cần update
       const updateFields = {};
       for (const key in variantData) {
         if (variantData[key] !== undefined) {
@@ -295,7 +347,7 @@ export const updateProductVariant = async (req, res) => {
         }
       }
 
-      // Update variant
+      // Cập nhật variant
       const updatedVariant = await ProductVariant.findByIdAndUpdate(
         req.params.id,
         updateFields,
@@ -313,6 +365,7 @@ export const updateProductVariant = async (req, res) => {
         data: updatedVariant,
       });
     } catch (error) {
+      console.error("Error updating variant:", error);
       return res.status(400).json({ message: error.message });
     }
   });
