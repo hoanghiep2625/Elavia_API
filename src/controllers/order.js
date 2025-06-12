@@ -198,15 +198,22 @@ export const getOrderById = async (req, res) => {
 export const updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, name, phone, address } = req.body;
 
-    if (!status) {
-      return res.status(400).json({ message: "Vui lòng cung cấp trạng thái mới" });
+    if (!status && !name && !phone && !address) {
+      return res.status(400).json({ message: "Vui lòng cung cấp thông tin cần cập nhật" });
     }
+
+    // Xây dựng object update
+    const updateData = {};
+    if (status) updateData.status = status;
+    if (name) updateData["user.name"] = name;
+    if (phone) updateData["user.phone"] = phone;
+    if (address) updateData["user.address"] = address;
 
     const order = await Order.findByIdAndUpdate(
       id,
-      { status },
+      { $set: updateData },
       { new: true }
     ).populate("items.productVariantId");
 
@@ -215,7 +222,7 @@ export const updateOrderStatus = async (req, res) => {
     }
 
     return res.status(200).json({
-      message: "Cập nhật trạng thái đơn hàng thành công",
+      message: "Cập nhật đơn hàng thành công",
       data: order,
     });
   } catch (error) {
