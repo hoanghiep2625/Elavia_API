@@ -198,18 +198,21 @@ export const getOrderById = async (req, res) => {
 export const updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, name, phone, address } = req.body;
+    const { status, user } = req.body;
 
-    if (!status && !name && !phone && !address) {
+    if (!status && !user) {
       return res.status(400).json({ message: "Vui lòng cung cấp thông tin cần cập nhật" });
     }
 
     // Xây dựng object update
     const updateData = {};
     if (status) updateData.status = status;
-    if (name) updateData["user.name"] = name;
-    if (phone) updateData["user.phone"] = phone;
-    if (address) updateData["user.address"] = address;
+    if (user && typeof user === "object") {
+      // Chỉ cập nhật các trường name, phone, address nếu có
+      if (user.name) updateData["user.name"] = user.name;
+      if (user.phone) updateData["user.phone"] = user.phone;
+      if (user.address) updateData["user.address"] = user.address;
+    }
 
     const order = await Order.findByIdAndUpdate(
       id,
