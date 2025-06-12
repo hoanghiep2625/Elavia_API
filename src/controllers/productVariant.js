@@ -27,18 +27,16 @@ const productVariantSchema = z.object({
 const patchProductVariantSchema = productVariantSchema.partial();
 
 const uploadImageToCloudinary = async (file) => {
-  try {
-    const result = await cloudinary.uploader.upload(file.path, {
-      folder: "products",
-    });
-    return {
-      url: result.secure_url,
-      public_id: result.public_id,
-    };
-  } catch (error) {
-    console.error("Upload to Cloudinary failed:", error);
-    throw new Error(`Failed to upload image: ${error.message}`);
-  }
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder: "products" },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve({ url: result.secure_url, public_id: result.public_id });
+      }
+    );
+    stream.end(file.buffer);
+  });
 };
 
 // Tạo biến thể sản phẩm
