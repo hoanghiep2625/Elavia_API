@@ -173,7 +173,7 @@ export const info = async (req, res) => {
 
 export const getListUser = async (req, res) => {
   try {
-    const { _page = 1, _limit = 10, _email, _phone } = req.query;
+    const { _page = 1, _limit = 10, _email, _phone, _sort = "createdAt", _order = "desc" } = req.query;
 
     // Tạo query tìm kiếm
     const query = {};
@@ -183,7 +183,7 @@ export const getListUser = async (req, res) => {
     const options = {
       page: parseInt(_page),
       limit: parseInt(_limit),
-      sort: { createdAt: -1 },
+      sort: { [_sort]: _order === "desc" ? -1 : 1 },
     };
     const users = await User.paginate(query, options);
     return res.status(200).json({

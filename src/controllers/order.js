@@ -100,7 +100,17 @@ export const cancelOrder = async (req, res) => {
 };
 export const getAllOrders = async (req, res) => {
   try {
-    const { _page = 1, _limit = 10, _orderId, _user, _phone, _email, _address } = req.query;
+    const { 
+      _page = 1, 
+      _limit = 10, 
+      _sort = "createdAt", 
+      _order = "desc", 
+      _orderId, 
+      _user, 
+      _phone, 
+      _email, 
+      _address 
+    } = req.query;
 
     // Tạo query tìm kiếm
     const query = {};
@@ -109,15 +119,15 @@ export const getAllOrders = async (req, res) => {
     if (_phone) query["user.phone"] = { $regex: _phone, $options: "i" };
     if (_email) query["user.email"] = { $regex: _email, $options: "i" };
     if (_address) query["user.address"] = { $regex: _address, $options: "i" };
-  
+
     const options = {
       page: parseInt(_page),
       limit: parseInt(_limit),
+      sort: { [_sort]: _order === "desc" ? -1 : 1 },
       populate: {
         path: "items.productVariantId",
         model: "ProductVariant",
       },
-      sort: { createdAt: -1 },
     };
 
     const result = await Order.paginate(query, options);
