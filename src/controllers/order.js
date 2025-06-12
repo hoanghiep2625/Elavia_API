@@ -195,3 +195,37 @@ export const getOrderById = async (req, res) => {
     });
   }
 };
+export const updateOrderStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, name, phone, address } = req.body;
+
+    if (!status && !name && !phone && !address) {
+      return res.status(400).json({ message: "Vui lòng cung cấp thông tin cần cập nhật" });
+    }
+
+    // Xây dựng object update
+    const updateData = {};
+    if (status) updateData.status = status;
+    if (name) updateData["user.name"] = name;
+    if (phone) updateData["user.phone"] = phone;
+    if (address) updateData["user.address"] = address;
+
+    const order = await Order.findByIdAndUpdate(
+      id,
+      { $set: updateData },
+      { new: true }
+    ).populate("items.productVariantId");
+
+    if (!order) {
+      return res.status(404).json({ message: "Đơn hàng không tồn tại" });
+    }
+
+    return res.status(200).json({
+      message: "Cập nhật đơn hàng thành công",
+      data: order,
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+};
