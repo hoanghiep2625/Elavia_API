@@ -27,7 +27,7 @@ import {
   checkAuthAdmin,
   getAdminProfile,
 } from "../middlewares/checkAuthAdmin.js";
-import { getAllOrders, getOrderById, getOrders } from "../controllers/order.js";
+import { getAllOrders, getOrderById, getOrders, updateOrderStatus } from "../controllers/order.js";
 import {
   getStats,
   getUserStats,
@@ -62,9 +62,10 @@ router.patch("/variants/:id", updateProductVariant);
 router.delete("/variants/:id", deleteProductVariant);
 router.get("/variants/:id", getProductVariantById);
 
-router.get("/orders/:userId", getOrders); //lấy order của user
+router.get("/orders/user/:userId", getOrders); 
+router.get("/orders/:id", getOrderById);      
 router.get("/orders", getAllOrders);
-router.get("/orders/:id", getOrderById);
+router.patch("/orders/:id", updateOrderStatus);
 
 router.get("/stats", getStats);
 router.get("/stats/users", getUserStats);

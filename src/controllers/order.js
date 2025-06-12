@@ -195,3 +195,30 @@ export const getOrderById = async (req, res) => {
     });
   }
 };
+export const updateOrderStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({ message: "Vui lòng cung cấp trạng thái mới" });
+    }
+
+    const order = await Order.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true }
+    ).populate("items.productVariantId");
+
+    if (!order) {
+      return res.status(404).json({ message: "Đơn hàng không tồn tại" });
+    }
+
+    return res.status(200).json({
+      message: "Cập nhật trạng thái đơn hàng thành công",
+      data: order,
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+};

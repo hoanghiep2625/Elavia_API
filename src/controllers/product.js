@@ -36,7 +36,7 @@ export const getProducts = async (req, res) => {
     const {
       _limit = 10,
       _page = 1,
-      _sort = "name",
+      _sort = "createdAt",
       _order = "asc",
       categoryId,
       _name, // tìm theo tên
