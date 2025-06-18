@@ -1,6 +1,7 @@
 import { z } from "zod";
 import mongoose from "mongoose";
 import Product from "../models/product.js";
+import ProductVariant from "../models/productVariant.js";
 
 const productSchema = z.object({
   name: z.string().min(2, "Tên sản phẩm cần tối thiểu 2 ký tự"),
@@ -39,26 +40,40 @@ export const getProducts = async (req, res) => {
       _sort = "createdAt",
       _order = "asc",
       categoryId,
-      _name, // tìm theo tên
-      _sku,  // tìm theo sku
+      _name,
+      _sku,
     } = req.query;
+
     const options = {
       page: parseInt(_page),
       limit: parseInt(_limit),
       sort: { [_sort]: _order === "desc" ? -1 : 1 },
       populate: "categoryId",
+      lean: true
     };
+
     const query = {};
     if (categoryId) query.categoryId = categoryId;
-    if (_name) {
-      query.name = { $regex: _name, $options: "i" };
-    }
-    if (_sku) {
-      query.sku = { $regex: _sku, $options: "i" }; // tìm sku không phân biệt hoa thường
-    }
+    if (_name) query.name = { $regex: _name, $options: "i" };
+    if (_sku) query.sku = { $regex: _sku, $options: "i" };
+
     const products = await Product.paginate(query, options);
+
+    // Đếm số lượng biến thể cho mỗi sản phẩm
+    const productsWithVariantCount = await Promise.all(
+      products.docs.map(async (product) => {
+        const variantCount = await ProductVariant.countDocuments({
+          productId: product._id
+        });
+        return {
+          ...product,
+          variantCount
+        };
+      })
+    );
+
     return res.status(200).json({
-      data: products.docs,
+      data: productsWithVariantCount,
       total: products.totalDocs,
       currentPage: products.page,
       totalPages: products.totalPages,
