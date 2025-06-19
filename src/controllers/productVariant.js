@@ -23,6 +23,7 @@ const productVariantSchema = z.object({
       stock: z.number().min(0),
     })
   ),
+  status: z.boolean().optional(), // true = active, false = inactive
 });
 const patchProductVariantSchema = productVariantSchema.partial();
 
@@ -110,6 +111,7 @@ export const getProductVariants = async (req, res) => {
       _stockMax,
       _name,
       _sku,
+      _status,
     } = req.query;
 
     // Tạo query lọc
@@ -153,6 +155,12 @@ export const getProductVariants = async (req, res) => {
     // Lọc theo sku
     if (_sku) {
       query.sku = { $regex: _sku, $options: "i" };
+    }
+
+    // Lọc theo status
+    if (_status !== undefined) {
+      if (_status === "true" || _status === true) query.status = true;
+      else if (_status === "false" || _status === false) query.status = false;
     }
 
     // Cấu hình phân trang và sắp xếp

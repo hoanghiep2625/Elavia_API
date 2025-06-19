@@ -6,6 +6,7 @@ export const parseFormData = (body) => {
     "color.baseColor": baseColor,
     "color.actualColor": actualColor,
     "color.colorName": colorName,
+    status,
     sizes = [], // Giải quyết trường hợp sizes trống
     ...rest
   } = body;
@@ -27,5 +28,6 @@ export const parseFormData = (body) => {
       colorName,
     },
     sizes: parsedSizes, // Trả về mảng sizes đã được parse đúng
+    status: status === "true" || status === true,     
   };
 };

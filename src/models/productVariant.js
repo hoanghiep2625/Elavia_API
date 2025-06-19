@@ -43,6 +43,11 @@ const productVariantSchema = new mongoose.Schema(
         stock: { type: Number, required: true, min: 0, index: true },
       },
     ],
+    status: {
+      type: Boolean,
+      default: true, // true = active, false = inactive
+      index: true,
+    },
   },
   { timestamps: true, versionKey: false }
 );
