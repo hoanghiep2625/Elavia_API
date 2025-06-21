@@ -148,3 +148,26 @@ export const deleteProduct = async (req, res) => {
     });
   }
 };
+export const deleteProductBulkDelete = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: "Vui lòng cung cấp mảng ids sản phẩm cần xóa" });
+    }
+
+    // Xóa các sản phẩm
+    const result = await Product.deleteMany({ _id: { $in: ids } });
+
+    // Xóa tất cả các biến thể của các sản phẩm đã xóa
+    await ProductVariant.deleteMany({ productId: { $in: ids } });
+
+    return res.status(200).json({
+      message: "Xóa sản phẩm hàng loạt thành công",
+      deletedCount: result.deletedCount,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      message: error.message,
+    });
+  }
+};

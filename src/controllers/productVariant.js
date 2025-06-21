@@ -507,3 +507,38 @@ export const getProductVariantsByProductId = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+export const deleteProductVariantBulkDelete = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: "Danh sách id cần xóa không hợp lệ" });
+    }
+
+    // Lấy tất cả các variant cần xóa
+    const variants = await ProductVariant.find({ _id: { $in: ids } });
+
+    // Xoá ảnh trên Cloudinary cho từng variant
+    for (const variant of variants) {
+      const images = variant.images;
+      if (images?.main?.public_id)
+        await cloudinary.uploader.destroy(images.main.public_id);
+      if (images?.hover?.public_id)
+        await cloudinary.uploader.destroy(images.hover.public_id);
+      if (images?.product?.length) {
+        for (const img of images.product) {
+          if (img.public_id) await cloudinary.uploader.destroy(img.public_id);
+        }
+      }
+    }
+
+    // Xóa các variant trong database
+    const result = await ProductVariant.deleteMany({ _id: { $in: ids } });
+
+    return res.status(200).json({
+      message: "Xóa các biến thể sản phẩm thành công",
+      deletedCount: result.deletedCount,
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+};
