@@ -488,3 +488,22 @@ export const getColorsByProductId = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+export const getProductVariantsByProductId = async (req, res) => {
+  try {
+    const { productId } = req.params;
+
+    if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: "productId không hợp lệ" });
+    }
+
+    const variants = await ProductVariant.find({ productId }).populate("productId");
+
+    return res.status(200).json({
+      data: variants,
+      total: variants.length,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};

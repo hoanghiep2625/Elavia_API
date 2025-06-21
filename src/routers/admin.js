@@ -12,6 +12,7 @@ import {
   deleteProductVariant,
   getProductVariants,
   getProductVariantById,
+  getProductVariantsByProductId,
 } from "../controllers/productVariant.js";
 import {
   createCategory,
@@ -61,6 +62,7 @@ router.post("/variants", createProductVariant);
 router.patch("/variants/:id", updateProductVariant);
 router.delete("/variants/:id", deleteProductVariant);
 router.get("/variants/:id", getProductVariantById);
+router.get("/variants-product/:productId", getProductVariantsByProductId);
 
 router.get("/orders/user/:userId", getOrders); 
 router.get("/orders/:id", getOrderById);      
