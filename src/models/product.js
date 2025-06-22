@@ -20,6 +20,7 @@ const productSchema = new mongoose.Schema(
       ref: "ProductVariant", // Tên model biến thể
       default: null,
     },
+    status: { type: Boolean, default: true, index: true }, 
   },
   { timestamps: true, versionKey: false }
 );
