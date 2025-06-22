@@ -29,7 +29,12 @@ import {
   checkAuthAdmin,
   getAdminProfile,
 } from "../middlewares/checkAuthAdmin.js";
-import { getAllOrders, getOrderById, getOrders, updateOrderStatus } from "../controllers/order.js";
+import {
+  getAllOrders,
+  getOrderById,
+  getOrders,
+  updateOrderStatus,
+} from "../controllers/order.js";
 import {
   getStats,
   getUserStats,
@@ -52,7 +57,7 @@ router.get("/products/:id", getProductById);
 
 router.get("/users", getListUser);
 router.get("/users/:id", getUserById);
-router.patch("/users/:id", updateUser); 
+router.patch("/users/:id", updateUser);
 
 router.get("/categories", getCategories);
 router.post("/categories", createCategory);
@@ -63,13 +68,13 @@ router.get("/categories/:id", getCategoryById);
 router.get("/variants", getProductVariants);
 router.post("/variants", createProductVariant);
 router.patch("/variants/:id", updateProductVariant);
-router.delete("/variants/bulk-delete", deleteProductVariant);
+router.delete("/variants/bulk-delete", deleteProductBulkDelete);
 router.delete("/variants/:id", deleteProductVariant);
 router.get("/variants/:id", getProductVariantById);
 router.get("/variants-product/:productId", getProductVariantsByProductId);
 
-router.get("/orders/user/:userId", getOrders); 
-router.get("/orders/:id", getOrderById);      
+router.get("/orders/user/:userId", getOrders);
+router.get("/orders/:id", getOrderById);
 router.get("/orders", getAllOrders);
 router.patch("/orders/:id", updateOrderStatus);
 

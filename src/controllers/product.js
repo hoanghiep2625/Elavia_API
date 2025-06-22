@@ -12,7 +12,7 @@ const productSchema = z.object({
   shortDescription: z.string().optional(),
   description: z.string().optional(),
   representativeVariantId: z.string().nullable().optional(),
-  status: z.boolean().optional(), 
+  status: z.boolean().optional(),
 });
 
 // Tạo sản phẩm mới
@@ -44,14 +44,14 @@ export const getProducts = async (req, res) => {
       categoryId,
       _name,
       _sku,
-      _status, 
+      _status,
     } = req.query;
 
     const options = {
       page: parseInt(_page),
       limit: parseInt(_limit),
       sort: { [_sort]: _order === "desc" ? -1 : 1 },
-      populate: "categoryId",
+      populate: [{ path: "categoryId" }, { path: "representativeVariantId" }],
       lean: true,
     };
 
@@ -69,11 +69,24 @@ export const getProducts = async (req, res) => {
     // Đếm số lượng biến thể cho mỗi sản phẩm
     const productsWithVariantCount = await Promise.all(
       products.docs.map(async (product) => {
+        let representativeVariant = product.representativeVariantId;
+
+        // Nếu chưa có representativeVariantId, lấy variant đầu tiên theo ngày tạo
+        if (!representativeVariant) {
+          representativeVariant = await ProductVariant.findOne({
+            productId: product._id,
+          })
+            .sort({ createdAt: 1 })
+            .lean();
+        }
+
         const variantCount = await ProductVariant.countDocuments({
           productId: product._id,
         });
+
         return {
           ...product,
+          representativeVariantId: representativeVariant, // luôn trả về object hoặc null
           variantCount,
         };
       })
