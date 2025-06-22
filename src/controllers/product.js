@@ -12,6 +12,7 @@ const productSchema = z.object({
   shortDescription: z.string().optional(),
   description: z.string().optional(),
   representativeVariantId: z.string().nullable().optional(),
+  status: z.boolean().optional(), 
 });
 
 // Tạo sản phẩm mới
@@ -43,6 +44,7 @@ export const getProducts = async (req, res) => {
       categoryId,
       _name,
       _sku,
+      _status, 
     } = req.query;
 
     const options = {
@@ -57,6 +59,10 @@ export const getProducts = async (req, res) => {
     if (categoryId) query.categoryId = categoryId;
     if (_name) query.name = { $regex: _name, $options: "i" };
     if (_sku) query.sku = { $regex: _sku, $options: "i" };
+    if (_status !== undefined) {
+      if (_status === "true" || _status === true) query.status = true;
+      else if (_status === "false" || _status === false) query.status = false;
+    }
 
     const products = await Product.paginate(query, options);
 
