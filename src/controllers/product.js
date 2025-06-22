@@ -11,6 +11,7 @@ const productSchema = z.object({
   }),
   shortDescription: z.string().optional(),
   description: z.string().optional(),
+  representativeVariantId: z.string().nullable().optional(),
 });
 
 // Tạo sản phẩm mới
@@ -49,7 +50,7 @@ export const getProducts = async (req, res) => {
       limit: parseInt(_limit),
       sort: { [_sort]: _order === "desc" ? -1 : 1 },
       populate: "categoryId",
-      lean: true
+      lean: true,
     };
 
     const query = {};
@@ -63,11 +64,11 @@ export const getProducts = async (req, res) => {
     const productsWithVariantCount = await Promise.all(
       products.docs.map(async (product) => {
         const variantCount = await ProductVariant.countDocuments({
-          productId: product._id
+          productId: product._id,
         });
         return {
           ...product,
-          variantCount
+          variantCount,
         };
       })
     );
@@ -152,7 +153,9 @@ export const deleteProductBulkDelete = async (req, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ message: "Vui lòng cung cấp mảng ids sản phẩm cần xóa" });
+      return res
+        .status(400)
+        .json({ message: "Vui lòng cung cấp mảng ids sản phẩm cần xóa" });
     }
 
     // Xóa các sản phẩm
