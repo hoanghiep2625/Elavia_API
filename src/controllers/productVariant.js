@@ -17,6 +17,12 @@ const productVariantSchema = z.object({
     actualColor: z.string(),
     colorName: z.string(),
   }),
+  attributes: z.array(
+    z.object({
+      attribute: z.string(), // slug của Attribute (VD: "material")
+      value: z.string(), // VD: "Cotton"
+    })
+  ),
   sizes: z.array(
     z.object({
       size: z.enum(["S", "M", "L", "XL", "XXL"]),
@@ -497,7 +503,9 @@ export const getProductVariantsByProductId = async (req, res) => {
       return res.status(400).json({ message: "productId không hợp lệ" });
     }
 
-    const variants = await ProductVariant.find({ productId }).populate("productId");
+    const variants = await ProductVariant.find({ productId }).populate(
+      "productId"
+    );
 
     return res.status(200).json({
       data: variants,
@@ -511,7 +519,9 @@ export const deleteProductVariantBulkDelete = async (req, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ message: "Danh sách id cần xóa không hợp lệ" });
+      return res
+        .status(400)
+        .json({ message: "Danh sách id cần xóa không hợp lệ" });
     }
 
     // Lấy tất cả các variant cần xóa

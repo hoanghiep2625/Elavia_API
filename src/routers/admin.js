@@ -25,6 +25,13 @@ import {
 } from "../controllers/categories.js";
 
 import { getListUser, getUserById, updateUser } from "../controllers/auth.js";
+import {
+  getAllAttributes,
+  getAttribute,
+  createAttribute,
+  updateAttribute,
+  deleteAttribute,
+} from "../controllers/attributes.js";
 
 import {
   checkAuthAdmin,
@@ -81,5 +88,11 @@ router.patch("/orders/:id", updateOrderStatus);
 router.get("/stats", getStats);
 router.get("/stats/users", getUserStats);
 router.get("/stats/products", getProductStats);
+
+router.post("/attributes", createAttribute);
+router.patch("/attributes/:id", updateAttribute);
+router.delete("/attributes/:id", deleteAttribute);
+router.get("/attributes", getAllAttributes);
+router.get("/attributes/:id", getAttribute);
 
 export default router;

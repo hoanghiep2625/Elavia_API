@@ -13,7 +13,7 @@ import paymentRouter from "./routers/payment.js";
 import productVariantRouter from "./routers/productVariant.js";
 import recentlyViewed from "./routers/recentlyViewed.js";
 import wishList from "./routers/wishList.js";
-
+import attributeRouter from "./routers/attributes.js";
 dotenv.config();
 
 const app = express();
@@ -59,6 +59,7 @@ app.use("/api/cart", cartRouter);
 app.use("/api/orders", paymentRouter);
 app.use("/api/recently-viewed", recentlyViewed);
 app.use("/api/wishlist", wishList);
+app.use("/api/attributes", attributeRouter);
 
 // const PORT = 2625;
 // app.listen(PORT, async () => {

@@ -14,10 +14,9 @@ const productSchema = new mongoose.Schema(
     shortDescription: { type: String },
     description: { type: String },
 
-    // 👇 Thêm field mới: đại diện cho biến thể chính
     representativeVariantId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "ProductVariant", // Tên model biến thể
+      ref: "ProductVariant",
       default: null,
     },
     status: { type: Boolean, default: true, index: true }, 
