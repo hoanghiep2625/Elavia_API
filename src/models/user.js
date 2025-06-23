@@ -43,7 +43,7 @@ const shippingAddressSchema = new Schema({
   isDefault: {
     type: Boolean,
     default: false,
-  },
+  }
 });
 
 const registerSchema = new Schema(
@@ -93,6 +93,8 @@ const registerSchema = new Schema(
       default: 0,
     },
     refreshToken: { type: String, default: "" },
+    verificationCode: String,
+    isVerified: { type: Boolean, default: false },
   },
   {
     timestamps: true,
