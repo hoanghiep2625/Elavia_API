@@ -14,6 +14,7 @@ import {
   getProductVariants,
   getProductVariantById,
   getProductVariantsByProductId,
+  deleteProductVariantBulkDelete,
 } from "../controllers/productVariant.js";
 import {
   createCategory,
@@ -49,7 +50,6 @@ router.post("/info", getAdminProfile);
 
 router.get("/products", getProducts);
 router.post("/products", createProduct);
-router.delete("/products/:id", deleteProduct);
 router.delete("/products/bulk-delete", deleteProductBulkDelete);
 router.delete("/products/:id", deleteProduct);
 router.patch("/products/:id", updateProduct);
@@ -68,7 +68,7 @@ router.get("/categories/:id", getCategoryById);
 router.get("/variants", getProductVariants);
 router.post("/variants", createProductVariant);
 router.patch("/variants/:id", updateProductVariant);
-router.delete("/variants/bulk-delete", deleteProductBulkDelete);
+router.delete("/variants/bulk-delete", deleteProductVariantBulkDelete);
 router.delete("/variants/:id", deleteProductVariant);
 router.get("/variants/:id", getProductVariantById);
 router.get("/variants-product/:productId", getProductVariantsByProductId);
