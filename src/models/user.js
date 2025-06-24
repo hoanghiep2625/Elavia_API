@@ -95,6 +95,7 @@ const registerSchema = new Schema(
     refreshToken: { type: String, default: "" },
     verificationCode: String,
     isVerified: { type: Boolean, default: false },
+    verificationExpires: { type: Date, default: "" },
   },
   {
     timestamps: true,
