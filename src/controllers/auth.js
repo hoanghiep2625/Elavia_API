@@ -45,8 +45,8 @@ const registerSchema = z
     shipping_addresses: z
       .array(shippingAddressSchema)
       .min(1, "Cần ít nhất 1 địa chỉ giao hàng"),
+    role: z.enum(["1", "3"]).default("1"),
   })
-
   .refine((data) => data.password === data.confirmPassword, {
     message: "Mật khẩu không khớp",
     path: ["confirmPassword"],
@@ -93,8 +93,8 @@ export const register = async (req, res) => {
       ...value,
       email: value.email.toLowerCase(),
       password: hashedPassword,
-      role: "1",
-      verificationCode, // Lưu mã xác thực
+      role: value.role,
+      verificationCode,
     });
     // ✅ Gửi mã xác thực qua email
     await sendVerificationEmail(newUser.email, verificationCode);
