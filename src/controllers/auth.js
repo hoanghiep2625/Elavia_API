@@ -5,7 +5,7 @@ import { z } from "zod";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import RecentlyViewed from "../models/recentlyViewed.js";
-
+import sendVerificationEmail from "../utils/sendVerificationEmail.js";
 dotenv.config();
 const locationSchema = z.object({
   id: z.string(),
@@ -39,12 +39,15 @@ const registerSchema = z
       errorMap: () => ({ message: "Giới tính phải là 0 hoặc 1" }),
     }),
     password: z.string().min(6, "Mật khẩu tối thiểu 6 ký tự"),
+    verificationCode: z.string().optional(),
+    isVerified: z.boolean().default(false),
     confirmPassword: z.string(),
     shipping_addresses: z
       .array(shippingAddressSchema)
       .min(1, "Cần ít nhất 1 địa chỉ giao hàng"),
     role: z.enum(["1", "3"]).default("1"),
   })
+
   .refine((data) => data.password === data.confirmPassword, {
     message: "Mật khẩu không khớp",
     path: ["confirmPassword"],
@@ -83,17 +86,70 @@ export const register = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(value.password, 10);
+    // ✅ Tạo mã xác thực ngẫu nhiên
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     const newUser = await User.create({
       ...value,
       email: value.email.toLowerCase(),
       password: hashedPassword,
       role: value.role,
+      verificationCode,
     });
+     // ✅ Gửi mã xác thực qua email
+    await sendVerificationEmail(newUser.email, verificationCode);
 
     return res.status(201).json({ message: "Đăng ký thành công" });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
+};
+
+export const verifyCode = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy tài khoản." });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({ message: "Tài khoản đã xác thực trước đó." });
+    }
+
+    if (user.verificationCode !== code) {
+      return res.status(400).json({ message: "Mã xác thực không đúng." });
+    }
+
+    // ✅ Cập nhật trạng thái tài khoản
+    user.isVerified = true;
+    user.verificationCode = undefined;
+    await user.save();
+
+    return res.status(200).json({ message: "Xác thực thành công. Bạn có thể đăng nhập!" });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+export const resendCode = async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ message: "Thiếu email." });
+
+  const user = await User.findOne({ email: email.toLowerCase() });
+  if (!user) return res.status(404).json({ message: "Không tìm thấy người dùng." });
+
+  const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+  user.verificationCode = newCode;
+  user.isVerified = false; // Đặt lại trạng thái xác thực
+  user.verificationCode = newCode; // Cập nhật mã xác thực mới
+
+  await user.save();
+
+
+  await sendVerificationEmail(user.email, newCode);
+  res.status(200).json({ message: "Đã gửi lại mã xác thực." });
 };
 
 export const login = async (req, res) => {
@@ -114,7 +170,9 @@ export const login = async (req, res) => {
     if (!isMatch) {
       return res.status(400).json({ message: "Mật khẩu không chính xác" });
     }
-
+    if (!user.isVerified) {
+      return res.status(402).json({ message: "Tài khoản chưa được xác thực" });
+    }
     const token = generateAccessToken(user._id, user.email, user.role);
     const refreshToken = generateRefreshToken(user._id, user.email, user.role);
     const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
@@ -129,7 +187,6 @@ export const login = async (req, res) => {
       sameSite: "strict",
       path: "/api/auth/refresh",
     });
-    console.log(user);
     return res.status(200).json({
       message: "Đăng nhập thành công",
       user: { id: user._id, email: user.email, name: user.name, token },
@@ -237,7 +294,6 @@ export const getUserById = async (req, res) => {
 export const addShippingAddress = async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log("🚀 ~ addShippingAddress ~ userId:", userId);
 
     const result = shippingAddressSchema.safeParse(req.body);
     if (!result.success) {

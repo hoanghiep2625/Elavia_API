@@ -7,15 +7,19 @@ export const parseFormData = (body) => {
     "color.actualColor": actualColor,
     "color.colorName": colorName,
     status,
-    sizes = [], // Giải quyết trường hợp sizes trống
+    attributes = [],
+    sizes = [],
     ...rest
   } = body;
 
-  console.log("Rest:", rest); // Đảm bảo không thiếu dữ liệu
-
+  // Parse sizes
   const parsedSizes = sizes.map((sizeObj) => ({
     size: sizeObj.size,
     stock: Number(sizeObj.stock),
+  }));
+  const parsedAttributes = attributes.map((attributeObj) => ({
+    attribute: attributeObj.attribute,
+    value: attributeObj.value,
   }));
 
   return {
@@ -27,7 +31,8 @@ export const parseFormData = (body) => {
       actualColor,
       colorName,
     },
-    sizes: parsedSizes, // Trả về mảng sizes đã được parse đúng
-    status: status === "true" || status === true,     
+    sizes: parsedSizes,
+    attributes: parsedAttributes,
+    status: status === "true" || status === true,
   };
 };

@@ -11,6 +11,8 @@ import {
   updateUserInfo,
   updateShippingAddress,
   getShippingById,
+  verifyCode,
+  resendCode,
 } from "../controllers/auth.js";
 import { checkAuth } from "../middlewares/checkAuth.js";
 
@@ -31,5 +33,6 @@ router.put(
   checkAuth,
   updateShippingAddress
 );
-
+router.post("/verify", verifyCode); 
+router.post("/resend-code", resendCode);
 export default router;

@@ -32,7 +32,12 @@ const productVariantSchema = new mongoose.Schema(
         },
       ],
     },
-
+    attributes: [
+      {
+        attribute: { type: String, required: true }, // slug của Attribute (VD: "material")
+        value: { type: String, required: true }, // VD: "Cotton"
+      },
+    ],
     sizes: [
       {
         size: {
@@ -45,7 +50,7 @@ const productVariantSchema = new mongoose.Schema(
     ],
     status: {
       type: Boolean,
-      default: true, // true = active, false = inactive
+      default: true,
       index: true,
     },
   },

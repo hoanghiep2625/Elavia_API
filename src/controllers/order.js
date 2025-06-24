@@ -100,16 +100,16 @@ export const cancelOrder = async (req, res) => {
 };
 export const getAllOrders = async (req, res) => {
   try {
-    const { 
-      _page = 1, 
-      _limit = 10, 
-      _sort = "createdAt", 
-      _order = "desc", 
-      _orderId, 
-      _user, 
-      _phone, 
-      _email, 
-      _address 
+    const {
+      _page = 1,
+      _limit = 10,
+      _sort = "createdAt",
+      _order = "desc",
+      _orderId,
+      _user,
+      _phone,
+      _email,
+      _address,
     } = req.query;
 
     // Tạo query tìm kiếm
@@ -150,7 +150,7 @@ export const getAllOrders = async (req, res) => {
 export const getOrders = async (req, res) => {
   try {
     const userEmail = req.user.email;
-    const { _page = 1, _limit = 10} = req.query;
+    const { _page = 1, _limit = 10 } = req.query;
 
     const options = {
       page: parseInt(_page),
@@ -201,7 +201,9 @@ export const updateOrderStatus = async (req, res) => {
     const { status, user } = req.body;
 
     if (!status && !user) {
-      return res.status(400).json({ message: "Vui lòng cung cấp thông tin cần cập nhật" });
+      return res
+        .status(400)
+        .json({ message: "Vui lòng cung cấp thông tin cần cập nhật" });
     }
 
     // Xây dựng object update

@@ -13,6 +13,8 @@ import paymentRouter from "./routers/payment.js";
 import productVariantRouter from "./routers/productVariant.js";
 import recentlyViewed from "./routers/recentlyViewed.js";
 import wishList from "./routers/wishList.js";
+import attributeRouter from "./routers/attributes.js";
+import siteSettingsRouter from "./routers/siteSettings.js";
 
 dotenv.config();
 
@@ -59,7 +61,8 @@ app.use("/api/cart", cartRouter);
 app.use("/api/orders", paymentRouter);
 app.use("/api/recently-viewed", recentlyViewed);
 app.use("/api/wishlist", wishList);
-
+app.use("/api/attributes", attributeRouter);
+app.use("/api/site-settings", siteSettingsRouter);
 // const PORT = 2625;
 // app.listen(PORT, async () => {
 //     console.log(`🚀 Server running at http://localhost:${PORT}`);

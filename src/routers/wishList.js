@@ -1,13 +1,17 @@
 import { Router } from "express";
-import { checkAuth } from "../middlewares/checkAuth.js";
 import {
   addToWishlist,
   removeFromWishlist,
   getWishlist,
 } from "../controllers/wishList.js";
+
+import { checkAuth } from "../middlewares/checkAuth.js";
+
 const router = Router();
 
-router.get("/", checkAuth, getWishlist);
-router.post("/:productVariantId", checkAuth, addToWishlist);
-router.post("/remove/:productVariantId", checkAuth, removeFromWishlist);
+router.use(checkAuth);
+
+router.get("/", getWishlist);
+router.post("/:productVariantId", addToWishlist);
+router.post("/remove/:productVariantId", removeFromWishlist);
 export default router;

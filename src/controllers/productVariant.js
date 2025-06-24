@@ -17,6 +17,12 @@ const productVariantSchema = z.object({
     actualColor: z.string(),
     colorName: z.string(),
   }),
+  attributes: z.array(
+    z.object({
+      attribute: z.string(), // slug của Attribute (VD: "material")
+      value: z.string(), // VD: "Cotton"
+    })
+  ),
   sizes: z.array(
     z.object({
       size: z.enum(["S", "M", "L", "XL", "XXL"]),
@@ -50,9 +56,7 @@ export const createProductVariant = async (req, res) => {
     if (err) return res.status(400).json({ message: err.message });
 
     try {
-      console.log("Received body:", req.body);
       const formData = parseFormData(req.body);
-      console.log("formData:", JSON.stringify(formData, null, 2));
 
       const result = productVariantSchema.safeParse(formData);
       if (!result.success) {
@@ -262,7 +266,6 @@ export const updateProductVariant = async (req, res) => {
           deletedImages.map(async (publicId) => {
             try {
               await cloudinary.uploader.destroy(publicId);
-              console.log(`Deleted image ${publicId}`);
             } catch (error) {
               console.error(`Failed to delete image ${publicId}:`, error);
             }
@@ -497,7 +500,9 @@ export const getProductVariantsByProductId = async (req, res) => {
       return res.status(400).json({ message: "productId không hợp lệ" });
     }
 
-    const variants = await ProductVariant.find({ productId }).populate("productId");
+    const variants = await ProductVariant.find({ productId }).populate(
+      "productId"
+    );
 
     return res.status(200).json({
       data: variants,
@@ -511,7 +516,9 @@ export const deleteProductVariantBulkDelete = async (req, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ message: "Danh sách id cần xóa không hợp lệ" });
+      return res
+        .status(400)
+        .json({ message: "Danh sách id cần xóa không hợp lệ" });
     }
 
     // Lấy tất cả các variant cần xóa

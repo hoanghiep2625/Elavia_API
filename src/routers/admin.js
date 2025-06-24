@@ -14,6 +14,7 @@ import {
   getProductVariants,
   getProductVariantById,
   getProductVariantsByProductId,
+  deleteProductVariantBulkDelete,
 } from "../controllers/productVariant.js";
 import {
   createCategory,
@@ -24,6 +25,13 @@ import {
 } from "../controllers/categories.js";
 
 import { getListUser, getUserById, updateUser } from "../controllers/auth.js";
+import {
+  getAllAttributes,
+  getAttribute,
+  createAttribute,
+  updateAttribute,
+  deleteAttribute,
+} from "../controllers/attributes.js";
 
 import {
   checkAuthAdmin,
@@ -40,6 +48,12 @@ import {
   getUserStats,
   getProductStats,
 } from "../controllers/stats.js";
+import {
+  getSiteSettings,
+  updateSiteSettings,
+} from "../controllers/siteSettings.js";
+
+import upload from "../middlewares/multer.js";
 
 const router = Router();
 
@@ -49,7 +63,6 @@ router.post("/info", getAdminProfile);
 
 router.get("/products", getProducts);
 router.post("/products", createProduct);
-router.delete("/products/:id", deleteProduct);
 router.delete("/products/bulk-delete", deleteProductBulkDelete);
 router.delete("/products/:id", deleteProduct);
 router.patch("/products/:id", updateProduct);
@@ -68,7 +81,7 @@ router.get("/categories/:id", getCategoryById);
 router.get("/variants", getProductVariants);
 router.post("/variants", createProductVariant);
 router.patch("/variants/:id", updateProductVariant);
-router.delete("/variants/bulk-delete", deleteProductBulkDelete);
+router.delete("/variants/bulk-delete", deleteProductVariantBulkDelete);
 router.delete("/variants/:id", deleteProductVariant);
 router.get("/variants/:id", getProductVariantById);
 router.get("/variants-product/:productId", getProductVariantsByProductId);
@@ -82,4 +95,22 @@ router.get("/stats", getStats);
 router.get("/stats/users", getUserStats);
 router.get("/stats/products", getProductStats);
 
+router.post("/attributes", createAttribute);
+router.patch("/attributes/:id", updateAttribute);
+router.delete("/attributes/:id", deleteAttribute);
+router.get("/attributes", getAllAttributes);
+router.get("/attributes/:id", getAttribute);
+
+router.get("/site-settings/singleton", getSiteSettings);
+router.patch(
+  "/site-settings/singleton",
+  upload.fields([
+    { name: "logo", maxCount: 1 },
+    { name: "favicon", maxCount: 1 },
+    { name: "banner02", maxCount: 1 },
+    { name: "banner01", maxCount: 10 },
+    { name: "banner03", maxCount: 10 },
+  ]),
+  updateSiteSettings
+);
 export default router;
