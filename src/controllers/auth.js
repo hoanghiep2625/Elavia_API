@@ -187,7 +187,6 @@ export const login = async (req, res) => {
       sameSite: "strict",
       path: "/api/auth/refresh",
     });
-    console.log(user);
     return res.status(200).json({
       message: "Đăng nhập thành công",
       user: { id: user._id, email: user.email, name: user.name, token },
@@ -295,7 +294,6 @@ export const getUserById = async (req, res) => {
 export const addShippingAddress = async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log("🚀 ~ addShippingAddress ~ userId:", userId);
 
     const result = shippingAddressSchema.safeParse(req.body);
     if (!result.success) {

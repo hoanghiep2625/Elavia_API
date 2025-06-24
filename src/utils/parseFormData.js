@@ -12,8 +12,6 @@ export const parseFormData = (body) => {
     ...rest
   } = body;
 
-  console.log("Rest:", rest); // Debug
-
   // Parse sizes
   const parsedSizes = sizes.map((sizeObj) => ({
     size: sizeObj.size,

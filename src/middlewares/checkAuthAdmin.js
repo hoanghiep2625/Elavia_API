@@ -35,10 +35,8 @@ export const getAdminProfile = async (req, res) => {
     }
 
     const token = authHeader.split(" ")[1];
-    console.log("TOKEN:", token); // ✅ Đặt sau khi khai báo
 
     const decoded = jwt.verify(token, process.env.SECRET_KEY);
-    console.log("Decoded token:", decoded);
 
     const admin = await User.findById(decoded.id).select("-password");
 

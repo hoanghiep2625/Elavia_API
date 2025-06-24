@@ -48,6 +48,12 @@ import {
   getUserStats,
   getProductStats,
 } from "../controllers/stats.js";
+import {
+  getSiteSettings,
+  updateSiteSettings,
+} from "../controllers/siteSettings.js";
+
+import upload from "../middlewares/multer.js";
 
 const router = Router();
 
@@ -95,4 +101,16 @@ router.delete("/attributes/:id", deleteAttribute);
 router.get("/attributes", getAllAttributes);
 router.get("/attributes/:id", getAttribute);
 
+router.get("/site-settings/singleton", getSiteSettings);
+router.patch(
+  "/site-settings/singleton",
+  upload.fields([
+    { name: "logo", maxCount: 1 },
+    { name: "favicon", maxCount: 1 },
+    { name: "banner02", maxCount: 1 },
+    { name: "banner01", maxCount: 10 },
+    { name: "banner03", maxCount: 10 },
+  ]),
+  updateSiteSettings
+);
 export default router;

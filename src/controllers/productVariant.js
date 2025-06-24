@@ -56,9 +56,7 @@ export const createProductVariant = async (req, res) => {
     if (err) return res.status(400).json({ message: err.message });
 
     try {
-      console.log("Received body:", req.body);
       const formData = parseFormData(req.body);
-      console.log("formData:", JSON.stringify(formData, null, 2));
 
       const result = productVariantSchema.safeParse(formData);
       if (!result.success) {
@@ -268,7 +266,6 @@ export const updateProductVariant = async (req, res) => {
           deletedImages.map(async (publicId) => {
             try {
               await cloudinary.uploader.destroy(publicId);
-              console.log(`Deleted image ${publicId}`);
             } catch (error) {
               console.error(`Failed to delete image ${publicId}:`, error);
             }
