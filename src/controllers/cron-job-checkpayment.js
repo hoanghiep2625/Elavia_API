@@ -1,6 +1,3 @@
-// Để chạy file này, sử dụng lệnh:
-// node src/controllers/cron-job-checkpayment.js
-
 import cron from "node-cron";
 import axios from "axios";
 import mongoose from "mongoose";

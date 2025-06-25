@@ -1,23 +1,11 @@
 import Category from "../models/categories.js";
-import { z } from "zod";
 import mongoose from "mongoose";
+import {
+  categorySchema,
+  patchCategorySchema,
+} from "../schemaValidations/categories.schema.js";
 
-const categorySchema = z.object({
-  name: z.string().min(2, "Tên danh mục cần tối thiểu 2 ký tự"),
-  parentId: z
-    .string()
-    .refine((val) => val === null || mongoose.Types.ObjectId.isValid(val), {
-      message: "parentId phải là ObjectId hợp lệ hoặc null",
-    })
-    .nullable()
-    .optional(),
-  level: z
-    .number()
-    .int()
-    .min(1, "Cấp độ phải là số nguyên lớn hơn hoặc bằng 1")
-    .max(3, "Cấp độ tối đa là 3"),
-});
-
+// Tạo danh mục mới
 export const createCategory = async (req, res) => {
   try {
     const result = categorySchema.safeParse(req.body);
@@ -53,22 +41,32 @@ export const createCategory = async (req, res) => {
     });
   }
 };
+
+// Lấy danh sách danh mục
 export const getCategories = async (req, res) => {
   try {
-    const { _sort = "level", _order = "asc", _level, _parentId, _name } = req.query;
+    const {
+      _sort = "level",
+      _order = "asc",
+      _level,
+      _parentId,
+      _name = "",
+    } = req.query;
 
     const sortOptions = { [_sort]: _order === "desc" ? -1 : 1 };
 
     const query = {};
     if (_level) query.level = parseInt(_level);
-    if (_parentId) query.parentId = _parentId;
-    if (_name) query.name = { $regex: _name, $options: "i" }; // Tìm kiếm theo tên, không phân biệt hoa thường
+    if (_parentId && mongoose.Types.ObjectId.isValid(_parentId)) {
+      query.parentId = new mongoose.Types.ObjectId(_parentId);
+    }
+    if (_name) query.name = { $regex: _name, $options: "i" };
 
     const categories = await Category.find(query).sort(sortOptions);
 
     return res.status(200).json({
       data: categories,
-      total: categories.length, // Tổng số danh mục
+      total: categories.length,
     });
   } catch (error) {
     return res.status(400).json({
@@ -76,8 +74,14 @@ export const getCategories = async (req, res) => {
     });
   }
 };
+
+// Lấy chi tiết danh mục
 export const getCategoryById = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid category ID" });
+    }
+
     const category = await Category.findById(req.params.id);
     if (!category) {
       return res.status(404).json({ message: "Danh mục không tồn tại" });
@@ -89,8 +93,14 @@ export const getCategoryById = async (req, res) => {
     });
   }
 };
+
+// Xóa danh mục
 export const deleteCategory = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid category ID" });
+    }
+
     const category = await Category.findById(req.params.id);
     if (!category) {
       return res.status(404).json({ message: "Danh mục không tồn tại" });
@@ -114,20 +124,22 @@ export const deleteCategory = async (req, res) => {
     });
   }
 };
+
+// Lấy danh sách danh mục cha
 export const getParentCategories = async (req, res) => {
   try {
-    const categoryId = req.params.id;
-    const category = await Category.findById(categoryId);
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid category ID" });
+    }
 
+    const category = await Category.findById(req.params.id);
     if (!category) {
       return res.status(404).json({ message: "Danh mục không tồn tại" });
     }
 
-    // Dùng recursive để lấy danh mục cha
     let parentCategories = [];
     let currentCategory = category;
 
-    // Lặp lại cho đến khi không còn parentId
     while (currentCategory.parentId) {
       const parentCategory = await Category.findById(currentCategory.parentId);
       if (!parentCategory) {
@@ -137,8 +149,7 @@ export const getParentCategories = async (req, res) => {
       currentCategory = parentCategory;
     }
 
-    // Danh mục cha cuối cùng là cấp 1
-    parentCategories.reverse(); // Đảo lại để cha cấp 1 là phần đầu tiên
+    parentCategories.reverse();
     return res.status(200).json({
       data: parentCategories,
     });
@@ -148,9 +159,11 @@ export const getParentCategories = async (req, res) => {
     });
   }
 };
+
+// Cập nhật danh mục
 export const updateCategory = async (req, res) => {
   try {
-    const result = categorySchema.partial().safeParse(req.body);
+    const result = patchCategorySchema.safeParse(req.body);
     if (!result.success) {
       const errors = result.error.errors.map((err) => err.message);
       return res.status(400).json({ errors });
@@ -181,6 +194,10 @@ export const updateCategory = async (req, res) => {
           .status(400)
           .json({ message: "Danh mục không có parentId phải có level là 1" });
       }
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid category ID" });
     }
 
     const category = await Category.findByIdAndUpdate(

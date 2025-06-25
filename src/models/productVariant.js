@@ -59,6 +59,4 @@ const productVariantSchema = new mongoose.Schema(
 
 productVariantSchema.plugin(mongoosePaginate);
 
-const ProductVariant = mongoose.model("ProductVariant", productVariantSchema);
-
-export default ProductVariant;
+export default mongoose.model("ProductVariant", productVariantSchema);

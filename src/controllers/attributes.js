@@ -1,63 +1,181 @@
+import mongoose from "mongoose";
 import Attribute from "../models/attributes.js";
+import {
+  attributeSchema,
+  patchAttributeSchema,
+} from "../schemaValidations/attribute.schema.js";
 
 export const getAllAttributes = async (req, res) => {
   try {
-    const attributes = await Attribute.find();
-    res.json(attributes);
+    const {
+      _page = 1,
+      _limit = 10,
+      _sort = "createdAt",
+      _order = "asc",
+      _name = "",
+      _slug = "",
+      _values = "",
+    } = req.query;
+
+    const query = {};
+    if (_name) {
+      query.name = { $regex: _name, $options: "i" };
+    }
+    if (_slug) {
+      query.slug = { $regex: _slug, $options: "i" };
+    }
+    if (_values) {
+      const valuesArr = Array.isArray(_values) ? _values : _values.split(",");
+      query.values = {
+        $elemMatch: { $regex: valuesArr.join("|"), $options: "i" },
+      };
+    }
+
+    const options = {
+      page: parseInt(_page),
+      limit: parseInt(_limit),
+      sort: { [_sort]: _order === "desc" ? -1 : 1 },
+    };
+
+    const attributes = await Attribute.paginate(query, options);
+
+    return res.status(200).json({
+      data: attributes.docs,
+      totalPages: attributes.totalPages,
+      currentPage: attributes.page,
+      total: attributes.totalDocs,
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
 
+// Lấy chi tiết thuộc tính
 export const getAttribute = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "ID thuộc tính không hợp lệ" });
+    }
+
     const attribute = await Attribute.findById(req.params.id);
-    if (!attribute)
-      return res.status(404).json({ message: "Không tìm thấy biến thể" });
-    res.json(attribute);
+    if (!attribute) {
+      return res.status(404).json({ message: "Thuộc tính không tồn tại" });
+    }
+    return res.status(200).json(attribute);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
 
+// Tạo thuộc tính mới
 export const createAttribute = async (req, res) => {
   try {
-    const { name, slug, values } = req.body;
-    const exists = await Attribute.findOne({ slug });
-    if (exists) return res.status(400).json({ message: "Slug đã tồn tại" });
+    const result = attributeSchema.safeParse(req.body);
+    if (!result.success) {
+      const errors = result.error.errors.map((err) => err.message);
+      return res.status(400).json({ errors });
+    }
 
-    const attribute = new Attribute({ name, slug, values });
-    await attribute.save();
-    res.status(201).json(attribute);
+    const { name, slug, values } = result.data;
+    const exists = await Attribute.findOne({ slug });
+    if (exists) {
+      return res.status(400).json({ message: "Slug đã tồn tại" });
+    }
+
+    const attribute = await Attribute.create({ name, slug, values });
+    return res.status(201).json(attribute);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
 
 export const updateAttribute = async (req, res) => {
   try {
-    const { name, values } = req.body;
-    const attribute = await Attribute.findById(req.params.id);
-    if (!attribute)
-      return res.status(404).json({ message: "Không tìm thấy biến thể" });
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "ID thuộc tính không hợp lệ" });
+    }
 
-    attribute.name = name ?? attribute.name;
-    attribute.values = values ?? attribute.values;
-    await attribute.save();
+    const result = patchAttributeSchema.safeParse(req.body);
+    if (!result.success) {
+      const errors = result.error.errors.map((err) => err.message);
+      return res.status(400).json({ errors });
+    }
+    console.log("Parsed data:", result.data);
 
-    res.json(attribute);
+    const { name, slug, values } = result.data;
+    const updateFields = {};
+
+    // Prepare update fields
+    if (name !== undefined) updateFields.name = name;
+    if (values !== undefined) updateFields.values = values;
+
+    // Handle slug update with uniqueness check
+    if (
+      slug !== undefined &&
+      slug !== (await Attribute.findById(req.params.id)).slug
+    ) {
+      const existingSlug = await Attribute.findOne({ slug });
+      if (existingSlug && existingSlug._id.toString() !== req.params.id) {
+        return res.status(400).json({ message: "Slug đã tồn tại" });
+      }
+      updateFields.slug = slug;
+      console.log("Updating slug to:", slug);
+    }
+
+    // Validate updated fields
+    const tempAttribute = new Attribute({
+      ...(await Attribute.findById(req.params.id)),
+      ...updateFields,
+    });
+    const validationError = tempAttribute.validateSync();
+    if (validationError) {
+      const errors = Object.values(validationError.errors).map(
+        (err) => err.message
+      );
+      return res.status(400).json({ message: "Dữ liệu không hợp lệ", errors });
+    }
+
+    // Perform update
+    const updatedAttribute = await Attribute.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateFields },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedAttribute) {
+      return res.status(404).json({ message: "Thuộc tính không tồn tại" });
+    }
+
+    console.log("Saved attribute:", updatedAttribute);
+
+    return res.status(200).json({
+      message: "Cập nhật thuộc tính thành công",
+      data: updatedAttribute,
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Error updating attribute:", err);
+    return res
+      .status(500)
+      .json({
+        message: "Lỗi server khi cập nhật thuộc tính",
+        error: err.message,
+      });
   }
 };
 
+// Xóa thuộc tính
 export const deleteAttribute = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "ID thuộc tính không hợp lệ" });
+    }
+
     const attribute = await Attribute.findByIdAndDelete(req.params.id);
-    if (!attribute)
-      return res.status(404).json({ message: "Không tìm thấy biến thể" });
-    res.json({ message: "Xoá biến thể thành công" });
+    if (!attribute) {
+      return res.status(404).json({ message: "Thuộc tính không tồn tại" });
+    }
+    return res.status(200).json({ message: "Xóa thuộc tính thành công" });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };

@@ -1,19 +1,10 @@
-import { z } from "zod";
 import mongoose from "mongoose";
 import Product from "../models/product.js";
 import ProductVariant from "../models/productVariant.js";
-
-const productSchema = z.object({
-  name: z.string().min(2, "Tên sản phẩm cần tối thiểu 2 ký tự"),
-  sku: z.string(),
-  categoryId: z.string().refine((val) => mongoose.Types.ObjectId.isValid(val), {
-    message: "categoryId phải là ObjectId hợp lệ",
-  }),
-  shortDescription: z.string().optional(),
-  description: z.string().optional(),
-  representativeVariantId: z.string().nullable().optional(),
-  status: z.boolean().optional(),
-});
+import {
+  productSchema,
+  patchProductSchema,
+} from "../schemaValidations/product.schema.js";
 
 // Tạo sản phẩm mới
 export const createProduct = async (req, res) => {
@@ -42,8 +33,8 @@ export const getProducts = async (req, res) => {
       _sort = "createdAt",
       _order = "asc",
       categoryId,
-      _name,
-      _sku,
+      _name = "",
+      _sku = "",
       _status,
     } = req.query;
 
@@ -71,7 +62,6 @@ export const getProducts = async (req, res) => {
       products.docs.map(async (product) => {
         let representativeVariant = product.representativeVariantId;
 
-        // Nếu chưa có representativeVariantId, lấy variant đầu tiên theo ngày tạo
         if (!representativeVariant) {
           representativeVariant = await ProductVariant.findOne({
             productId: product._id,
@@ -86,7 +76,7 @@ export const getProducts = async (req, res) => {
 
         return {
           ...product,
-          representativeVariantId: representativeVariant, // luôn trả về object hoặc null
+          representativeVariantId: representativeVariant,
           variantCount,
         };
       })
@@ -108,6 +98,10 @@ export const getProducts = async (req, res) => {
 // Lấy chi tiết sản phẩm
 export const getProductById = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid product ID" });
+    }
+
     const product = await Product.findById(req.params.id).populate(
       "categoryId"
     );
@@ -125,7 +119,7 @@ export const getProductById = async (req, res) => {
 // Cập nhật sản phẩm
 export const updateProduct = async (req, res) => {
   try {
-    const result = productSchema.safeParse(req.body);
+    const result = patchProductSchema.safeParse(req.body);
     if (!result.success) {
       const errors = result.error.errors.map((err) => err.message);
       return res.status(400).json({ errors });
@@ -152,11 +146,14 @@ export const updateProduct = async (req, res) => {
 // Xóa sản phẩm
 export const deleteProduct = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid product ID" });
+    }
+
     const product = await Product.findByIdAndDelete(req.params.id);
     if (!product) {
       return res.status(404).json({ message: "Sản phẩm không tồn tại" });
     }
-    // Xóa tất cả các biến thể của sản phẩm
     await ProductVariant.deleteMany({ productId: req.params.id });
     return res.status(200).json({
       message: "Xóa sản phẩm thành công",
@@ -168,6 +165,8 @@ export const deleteProduct = async (req, res) => {
     });
   }
 };
+
+// Xóa nhiều sản phẩm
 export const deleteProductBulkDelete = async (req, res) => {
   try {
     const { ids } = req.body;
@@ -177,10 +176,7 @@ export const deleteProductBulkDelete = async (req, res) => {
         .json({ message: "Vui lòng cung cấp mảng ids sản phẩm cần xóa" });
     }
 
-    // Xóa các sản phẩm
     const result = await Product.deleteMany({ _id: { $in: ids } });
-
-    // Xóa tất cả các biến thể của các sản phẩm đã xóa
     await ProductVariant.deleteMany({ productId: { $in: ids } });
 
     return res.status(200).json({

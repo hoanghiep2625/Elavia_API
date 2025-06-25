@@ -55,6 +55,13 @@ import {
 
 import upload from "../middlewares/multer.js";
 
+import {
+  getVouchers,
+  createVoucher,
+  updateVoucher,
+  deleteVoucher,
+  getVoucherById,
+} from "../controllers/vocher.js";
 const router = Router();
 
 router.use(checkAuthAdmin);
@@ -113,4 +120,10 @@ router.patch(
   ]),
   updateSiteSettings
 );
+router.get("/vouchers", getVouchers);
+router.get("/vouchers/:id", getVoucherById);
+router.post("/vouchers", createVoucher);
+router.patch("/vouchers/:id", updateVoucher);
+router.delete("/vouchers/:id", deleteVoucher);
+
 export default router;

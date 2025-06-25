@@ -122,5 +122,4 @@ OrderSchema.pre("save", function (next) {
 });
 OrderSchema.plugin(mongoosePaginate);
 
-const Order = mongoose.model("Order", OrderSchema);
-export default Order;
+export default mongoose.model("Order", OrderSchema);

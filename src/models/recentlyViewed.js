@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import mongoosePaginate from "mongoose-paginate-v2";
 
 const recentlyViewedSchema = new mongoose.Schema(
   {
@@ -17,5 +18,6 @@ const recentlyViewedSchema = new mongoose.Schema(
   },
   { timestamps: true, versionKey: false }
 );
+recentlyViewedSchema.plugin(mongoosePaginate);
 
 export default mongoose.model("RecentlyViewed", recentlyViewedSchema);

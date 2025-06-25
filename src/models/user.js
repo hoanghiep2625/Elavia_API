@@ -43,7 +43,7 @@ const shippingAddressSchema = new Schema({
   isDefault: {
     type: Boolean,
     default: false,
-  }
+  },
 });
 
 const registerSchema = new Schema(
@@ -87,11 +87,6 @@ const registerSchema = new Schema(
       enum: ["1", "3"],
       default: "1",
     },
-    verify: {
-      type: Number,
-      enum: [0, 1],
-      default: 0,
-    },
     refreshToken: { type: String, default: "" },
     verificationCode: String,
     isVerified: { type: Boolean, default: false },
@@ -106,5 +101,3 @@ const registerSchema = new Schema(
 registerSchema.plugin(mongoosePaginate);
 
 export default mongoose.model("user", registerSchema);
-
-

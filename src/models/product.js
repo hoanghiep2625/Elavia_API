@@ -19,13 +19,11 @@ const productSchema = new mongoose.Schema(
       ref: "ProductVariant",
       default: null,
     },
-    status: { type: Boolean, default: true, index: true }, 
+    status: { type: Boolean, default: true, index: true },
   },
   { timestamps: true, versionKey: false }
 );
 
 productSchema.plugin(mongoosePaginate);
 
-const Product = mongoose.model("Product", productSchema);
-
-export default Product;
+export default mongoose.model("Product", productSchema);

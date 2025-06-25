@@ -51,7 +51,10 @@ const siteSettingsSchema = new mongoose.Schema(
       policyLink: String,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    versionKey: false,
+  }
 );
 
 export const SiteSettings =

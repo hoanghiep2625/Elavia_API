@@ -15,6 +15,7 @@ import recentlyViewed from "./routers/recentlyViewed.js";
 import wishList from "./routers/wishList.js";
 import attributeRouter from "./routers/attributes.js";
 import siteSettingsRouter from "./routers/siteSettings.js";
+import voucherRouter from "./routers/vocher.js";
 
 dotenv.config();
 
@@ -31,7 +32,6 @@ app.use(
   })
 );
 app.use(cookieParser());
-app.use(express.json());
 
 const connectDB = async () => {
   try {
@@ -50,8 +50,8 @@ connectDB();
 // app.use(express.json());
 // app.use(express.urlencoded({ extended: true }));
 
-app.use(express.json({ limit: "20mb" }));
-app.use(express.urlencoded({ limit: "20mb", extended: true }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 app.use("/api/products", productRouter);
 app.use("/api/product-variants", productVariantRouter);
@@ -64,6 +64,8 @@ app.use("/api/recently-viewed", recentlyViewed);
 app.use("/api/wishlist", wishList);
 app.use("/api/attributes", attributeRouter);
 app.use("/api/site-settings", siteSettingsRouter);
+app.use("/api/vouchers", voucherRouter);
+
 // const PORT = 2625;
 // app.listen(PORT, async () => {
 //     console.log(`🚀 Server running at http://localhost:${PORT}`);
