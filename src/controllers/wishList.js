@@ -79,7 +79,11 @@ export const getWishlist = async (req, res) => {
 
     const wishlist = await WishList.findOne({ user: userId }).populate({
       path: "products",
-      select: "sku price color images sizes", // Chỉ lấy các trường cần thiết
+      select: "sku price color images sizes productId", // thêm productId ở đây
+      populate: {
+        path: "productId", // populate tiếp để lấy tên sản phẩm
+        select: "name",     // chỉ lấy tên
+      },
     });
 
     if (!wishlist) {
