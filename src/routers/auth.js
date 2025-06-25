@@ -13,6 +13,9 @@ import {
   getShippingById,
   verifyCode,
   resendCode,
+  setDefaultAddress,
+  deleteShippingAddress
+
 } from "../controllers/auth.js";
 import { checkAuth } from "../middlewares/checkAuth.js";
 
@@ -28,6 +31,8 @@ router.get("/my-info", checkAuth, myInfo);
 router.put("/change-password", checkAuth, changePassword);
 router.post("/add-shipping-address", checkAuth, addShippingAddress);
 router.put("/update-user-info", checkAuth, updateUserInfo);
+router.put("/address/default/:id", checkAuth, setDefaultAddress);
+router.delete("/address/:id", checkAuth, deleteShippingAddress);
 router.put(
   "/update-shipping-address/:addressId",
   checkAuth,

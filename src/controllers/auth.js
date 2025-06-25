@@ -480,3 +480,50 @@ export const updateUser = async (req, res) => {
     return res.status(400).json({ message: error.message });
   }
 };
+// controllers/addressController.js
+export const setDefaultAddress = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const addressId = req.params.id;
+
+    // Bỏ mặc định các địa chỉ khác
+    await User.updateMany(
+      { _id: userId, "shipping_addresses.isDefault": true },
+      { $set: { "shipping_addresses.$.isDefault": false } }
+    );
+
+    // Cập nhật địa chỉ mới thành mặc định
+    await User.updateOne(
+      { _id: userId, "shipping_addresses._id": addressId },
+      { $set: { "shipping_addresses.$.isDefault": true } }
+    );
+
+    res.json({ message: "Cập nhật địa chỉ mặc định thành công" });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server: " + err.message });
+  }
+};
+export const deleteShippingAddress = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const addressId = req.params.id;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Người dùng không tồn tại" });
+    }
+
+    user.shipping_addresses = user.shipping_addresses.filter(
+      (address) => address._id.toString() !== addressId
+    );
+
+    await user.save();
+
+    return res.status(200).json({
+      message: "Xoá địa chỉ thành công",
+      data: user.shipping_addresses,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
