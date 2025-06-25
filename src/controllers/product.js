@@ -55,11 +55,10 @@ export const getProducts = async (req, res) => {
       else if (_status === "false" || _status === false) query.status = false;
     }
 
-    const products = await Product.paginate(query, options);
+    const productsPaginated = await Product.paginate(query, options);
 
-    // Đếm số lượng biến thể cho mỗi sản phẩm
-    const productsWithVariantCount = await Promise.all(
-      products.docs.map(async (product) => {
+    const productsWithDetails = await Promise.all(
+      productsPaginated.docs.map(async (product) => {
         let representativeVariant = product.representativeVariantId;
 
         if (!representativeVariant) {
@@ -74,19 +73,36 @@ export const getProducts = async (req, res) => {
           productId: product._id,
         });
 
+        // Lấy danh sách màu (mỗi màu tương ứng một variant)
+        const variants = await ProductVariant.find({
+          productId: product._id,
+        })
+          .select("color._id color.actualColor")
+          .lean();
+
+        const colorMap = new Map();
+        for (const variant of variants) {
+          const colorId = variant._id;
+          const actualColor = variant.color?.actualColor;
+          if (actualColor && !colorMap.has(actualColor)) {
+            colorMap.set(actualColor, { _id: colorId, actualColor });
+          }
+        }
+
         return {
           ...product,
           representativeVariantId: representativeVariant,
           variantCount,
+          availableColors: Array.from(colorMap.values()), // [{ _id, actualColor }]
         };
       })
     );
 
     return res.status(200).json({
-      data: productsWithVariantCount,
-      total: products.totalDocs,
-      currentPage: products.page,
-      totalPages: products.totalPages,
+      data: productsWithDetails,
+      total: productsPaginated.totalDocs,
+      currentPage: productsPaginated.page,
+      totalPages: productsPaginated.totalPages,
     });
   } catch (error) {
     return res.status(400).json({
