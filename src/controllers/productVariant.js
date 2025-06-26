@@ -392,17 +392,20 @@ export const getRecentlyViewedProducts = async (req, res) => {
     );
 
     if (!viewed) {
-      return res.status(200).json({ data: [], total: 0, page, limit });
+      return res
+        .status(200)
+        .json({ data: [], total: 0, currentPage: page, totalPages: 0 });
     }
 
     const total = viewed.products.length;
+    const totalPages = Math.ceil(total / limit);
     const paginatedProducts = viewed.products.slice(skip, skip + limit);
 
     return res.status(200).json({
       data: paginatedProducts,
       total,
-      page,
-      limit,
+      currentPage: page,
+      totalPages,
     });
   } catch (error) {
     console.error("Không thể lấy danh sách đã xem:", error);

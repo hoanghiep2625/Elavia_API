@@ -75,25 +75,37 @@ export const removeFromWishlist = async (req, res) => {
 
 export const getWishlist = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 12;
+    const skip = (page - 1) * limit;
 
-    const wishlist = await WishList.findOne({ user: userId }).populate({
+    const wishlist = await WishList.findOne({ user: req.user.id }).populate({
       path: "products",
-      select: "sku price color images sizes productId", // thêm productId ở đây
+      model: "ProductVariant",
       populate: {
-        path: "productId", // populate tiếp để lấy tên sản phẩm
-        select: "name",     // chỉ lấy tên
+        path: "productId",
+        model: "Product",
       },
     });
 
     if (!wishlist) {
       return res
-        .status(404)
-        .json({ message: "Danh sách yêu thích không tồn tại" });
+        .status(200)
+        .json({ data: [], total: 0, currentPage: page, totalPages: 0 });
     }
 
-    return res.status(200).json({ wishlist });
+    const total = wishlist.products.length;
+    const totalPages = Math.ceil(total / limit);
+    const paginatedProducts = wishlist.products.slice(skip, skip + limit);
+
+    return res.status(200).json({
+      data: paginatedProducts,
+      total,
+      currentPage: page,
+      totalPages,
+    });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    console.error("Không thể lấy danh sách yêu thích:", error);
+    return res.sendStatus(500);
   }
 };
