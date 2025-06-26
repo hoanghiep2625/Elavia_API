@@ -1,4 +1,5 @@
 import Cart from "../models/cart.js";
+import ProductVariant from "../models/productVariant.js";
 import mongoose from "mongoose";
 
 export const addToCart = async (req, res) => {
@@ -149,6 +150,61 @@ export const getCartQuantity = async (req, res) => {
     res.json({ totalQuantity });
   } catch (error) {
     console.error("Lỗi khi lấy số lượng giỏ hàng:", error);
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+export const updateCart = async (req, res) => {
+  try {
+    const { productVariantId, size, quantity } = req.body;
+    const userId = req.user.id;
+    if (!productVariantId || !size || !quantity || quantity < 1) {
+      return res.status(400).json({ message: "Dữ liệu đầu vào không hợp lệ" });
+    }
+
+    const cart = await Cart.findOne({ userId }).populate(
+      "items.productVariantId"
+    );
+    if (!cart) {
+      return res.status(404).json({ message: "Giỏ hàng không tồn tại" });
+    }
+
+    const item = cart.items.find(
+      (i) =>
+        i.productVariantId._id.toString() === productVariantId &&
+        i.size === size
+    );
+    if (!item) {
+      return res
+        .status(404)
+        .json({ message: "Sản phẩm không có trong giỏ hàng" });
+    }
+
+    const productVariant = await ProductVariant.findById(productVariantId);
+    if (!productVariant) {
+      return res
+        .status(404)
+        .json({ message: "Biến thể sản phẩm không tồn tại" });
+    }
+
+    const sizeInfo = productVariant.sizes.find((s) => s.size === size);
+    if (!sizeInfo) {
+      return res.status(400).json({ message: "Kích cỡ không hợp lệ" });
+    }
+    if (quantity > sizeInfo.stock) {
+      return res
+        .status(400)
+        .json({ message: `Số lượng vượt quá tồn kho (${sizeInfo.stock})` });
+    }
+
+    item.quantity = quantity;
+    await cart.save();
+
+    const updatedCart = await Cart.findOne({ userId }).populate(
+      "items.productVariantId"
+    );
+    res.json({ success: true, data: updatedCart });
+  } catch (error) {
+    console.error("Lỗi khi cập nhật giỏ hàng:", error);
     res.status(500).json({ message: "Lỗi server" });
   }
 };
