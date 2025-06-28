@@ -12,7 +12,7 @@ export const shippingAddressSchema = z.object({
   district: locationSchema,
   commune: locationSchema,
   address: z.string().min(2, "Địa chỉ tối thiểu 2 ký tự"),
-  isDefault: z.boolean().optional(),
+  type: z.enum(["home", "company"]),
 });
 
 export const registerSchema = z

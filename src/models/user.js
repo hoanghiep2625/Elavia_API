@@ -40,9 +40,10 @@ const shippingAddressSchema = new Schema({
     type: String,
     required: true,
   },
-  isDefault: {
-    type: Boolean,
-    default: false,
+  type: {
+    type: String,
+    enum: ["home", "company"],
+    default: "home",
   },
 });
 
@@ -87,11 +88,16 @@ const registerSchema = new Schema(
       enum: ["1", "3"],
       default: "1",
     },
+    defaultAddress: {
+      type: String,
+      default: null,
+    },
     refreshToken: { type: String, default: "" },
     verificationCode: String,
     isVerified: { type: Boolean, default: false },
     verificationExpires: { type: Date, default: "" },
   },
+
   {
     timestamps: true,
     versionKey: false,
