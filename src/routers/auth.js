@@ -31,7 +31,6 @@ router.get("/my-info", checkAuth, myInfo);
 router.put("/change-password", checkAuth, changePassword);
 router.post("/add-shipping-address", checkAuth, addShippingAddress);
 router.put("/update-user-info", checkAuth, updateUserInfo);
-router.put("/address/default/:id", checkAuth, setDefaultAddress);
 router.delete("/address/:id", checkAuth, deleteShippingAddress);
 router.put(
   "/update-shipping-address/:addressId",
@@ -40,4 +39,9 @@ router.put(
 );
 router.post("/verify", verifyCode); 
 router.post("/resend-code", resendCode);
+
+
+
+router.put("/address/default/:addressId", checkAuth, setDefaultAddress);
+
 export default router;

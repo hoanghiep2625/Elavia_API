@@ -40,11 +40,14 @@ const shippingAddressSchema = new Schema({
     type: String,
     required: true,
   },
-  isDefault: {
-    type: Boolean,
-    default: false,
-  },
-});
+  defaultAddressId: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: null,
+  }
+},{
+    timestamps: true,
+  }
+);
 
 const registerSchema = new Schema(
   {
@@ -78,6 +81,10 @@ const registerSchema = new Schema(
       type: [shippingAddressSchema],
       default: [],
     },
+    defaultAddressId: {
+    type: mongoose.Schema.Types.ObjectId, 
+    default: null,
+  },
     password: {
       type: String,
       required: true,
