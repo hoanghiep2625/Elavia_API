@@ -110,6 +110,7 @@ export const getAllOrders = async (req, res) => {
       _phone,
       _email,
       _address,
+      _status, 
     } = req.query;
 
     // Tạo query tìm kiếm
@@ -119,6 +120,7 @@ export const getAllOrders = async (req, res) => {
     if (_phone) query["user.phone"] = { $regex: _phone, $options: "i" };
     if (_email) query["user.email"] = { $regex: _email, $options: "i" };
     if (_address) query["user.address"] = { $regex: _address, $options: "i" };
+    if (_status && _status !== "Tất cả") query.status = _status;
 
     const options = {
       page: parseInt(_page),
