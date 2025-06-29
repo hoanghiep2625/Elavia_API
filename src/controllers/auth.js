@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import User from "../models/user.js";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
+import LoginHistory from "../models/loginHistory.js";
 import RecentlyViewed from "../models/recentlyViewed.js";
 import useragent from "useragent";
 import sendVerificationEmail from "../utils/sendVerificationEmail.js";
@@ -130,6 +131,7 @@ export const resendCode = async (req, res) => {
 };
 
 // Đăng nhập
+
 export const login = async (req, res) => {
   try {
     const result = loginSchema.safeParse(req.body);
@@ -139,31 +141,34 @@ export const login = async (req, res) => {
 
     const { email, password } = result.data;
     const user = await User.findOne({ email: email.toLowerCase() });
-
-    if (!user) {
+    if (!user)
       return res.status(400).json({ message: "Tài khoản không tồn tại" });
-    }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
+    if (!isMatch)
       return res.status(400).json({ message: "Mật khẩu không chính xác" });
-    }
 
-    if (!user.isVerified) {
+    if (!user.isVerified)
       return res.status(402).json({ message: "Tài khoản chưa được xác thực" });
-    }
-    // ✅ GHI LỊCH SỬ ĐĂNG NHẬP
+
     const agent = useragent.parse(req.headers["user-agent"] || "");
-    await User.findByIdAndUpdate(user._id, {
-      $push: {
-        loginHistory: {
-          device: `${agent.os} (${agent.device.family || "desktop"})`,
-          platform: "Website elavia",
-          loginType: "Password",
-          ip: req.ip,
+    const now = new Date().toISOString().replace(/\./g, "_");
+
+    await LoginHistory.findOneAndUpdate(
+      { userId: user._id },
+      {
+        $set: {
+          [`logins.${now}`]: {
+            device: `${agent.os} (${agent.device.family || "desktop"})`,
+            platform: "Website elavia",
+            loginType: "Password",
+            ip: req.ip,
+          },
         },
       },
-    });
+      { upsert: true }
+    );
+
     const token = generateAccessToken(user._id, user.email, user.role);
     const refreshToken = generateRefreshToken(user._id, user.email, user.role);
     const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
@@ -188,21 +193,41 @@ export const login = async (req, res) => {
   }
 };
 
-
 export const getLoginHistory = async (req, res) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
-    const user = await User.findById(req.params.userId);
-    if (!user) return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
 
-    const history = [...(user.loginHistory || [])].reverse();
+    const historyDoc = await LoginHistory.findOne({
+      userId: req.params.userId,
+    });
+
+    if (!historyDoc || !historyDoc.logins) {
+      return res.json({
+        data: [],
+        total: 0,
+        currentPage: 1,
+        totalPages: 0,
+      });
+    }
+
+    const allEntries = Array.from(historyDoc.logins.entries())
+      .map(([timestamp, detail]) => ({
+        timestamp,
+        ...detail.toObject?.(), // đảm bảo là plain object
+      }))
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)); // sort giảm dần theo thời gian
+
+    const total = allEntries.length;
+    const totalPages = Math.ceil(total / limit);
     const start = (page - 1) * limit;
-    const paginated = history.slice(start, start + parseInt(limit));
+    const paginated = allEntries.slice(start, start + limit);
+
     return res.json({
       data: paginated,
-      total: history.length,
-      page: parseInt(page),
-      limit: parseInt(limit),
+      total,
+      currentPage: page,
+      totalPages,
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });

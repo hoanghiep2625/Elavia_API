@@ -96,18 +96,6 @@ const registerSchema = new Schema(
     verificationCode: String,
     isVerified: { type: Boolean, default: false },
     verificationExpires: { type: Date, default: "" },
-    loginHistory: {
-    type: [
-      {
-        device: String,           
-        platform: String,         
-        loginType: String,        
-        ip: String,               
-        timestamp: { type: Date, default: Date.now },
-      },
-    ],
-    default: [],
-    },
   },
   {
     timestamps: true,
