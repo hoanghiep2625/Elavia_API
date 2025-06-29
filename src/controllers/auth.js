@@ -3,6 +3,7 @@ import User from "../models/user.js";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import RecentlyViewed from "../models/recentlyViewed.js";
+import useragent from "useragent";
 import sendVerificationEmail from "../utils/sendVerificationEmail.js";
 import {
   registerSchema,
@@ -151,7 +152,18 @@ export const login = async (req, res) => {
     if (!user.isVerified) {
       return res.status(402).json({ message: "Tài khoản chưa được xác thực" });
     }
-
+    // ✅ GHI LỊCH SỬ ĐĂNG NHẬP
+    const agent = useragent.parse(req.headers["user-agent"] || "");
+    await User.findByIdAndUpdate(user._id, {
+      $push: {
+        loginHistory: {
+          device: `${agent.os} (${agent.device.family || "desktop"})`,
+          platform: "Website elavia",
+          loginType: "Password",
+          ip: req.ip,
+        },
+      },
+    });
     const token = generateAccessToken(user._id, user.email, user.role);
     const refreshToken = generateRefreshToken(user._id, user.email, user.role);
     const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
@@ -170,6 +182,27 @@ export const login = async (req, res) => {
     return res.status(200).json({
       message: "Đăng nhập thành công",
       user: { id: user._id, email: user.email, name: user.name, token },
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+
+export const getLoginHistory = async (req, res) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+    const user = await User.findById(req.params.userId);
+    if (!user) return res.status(404).json({ message: "Không tìm thấy người dùng" });
+
+    const history = [...(user.loginHistory || [])].reverse();
+    const start = (page - 1) * limit;
+    const paginated = history.slice(start, start + parseInt(limit));
+    return res.json({
+      data: paginated,
+      total: history.length,
+      page: parseInt(page),
+      limit: parseInt(limit),
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });
