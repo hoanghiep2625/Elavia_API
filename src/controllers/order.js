@@ -149,8 +149,7 @@ export const getAllOrders = async (req, res) => {
 
 export const getOrders = async (req, res) => {
   try {
-    const userEmail = req.user.email;
-    const { _page = 1, _limit = 10 } = req.query;
+    const { _page = 1, _limit = 10, status } = req.query;
 
     const options = {
       page: parseInt(_page),
@@ -162,7 +161,11 @@ export const getOrders = async (req, res) => {
       sort: { createdAt: -1 },
     };
 
-    const result = await Order.paginate({}, options);
+    const query = {};
+    if (status && status !== "Tất cả") {
+      query.status = status; // Lọc theo trạng thái nếu có
+    }
+    const result = await Order.paginate(query, options);
 
     if (!result.docs || result.docs.length === 0) {
       return res.status(200).json({ message: "Không có đơn hàng nào" });
