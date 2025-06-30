@@ -110,7 +110,7 @@ export const getAllOrders = async (req, res) => {
       _phone,
       _email,
       _address,
-      _status, 
+      _status,
     } = req.query;
 
     // Tạo query tìm kiếm
@@ -200,6 +200,23 @@ export const getOrderById = async (req, res) => {
     });
   }
 };
+const allowedStatusTransitions = {
+  "Chờ xác nhận": ["Đã xác nhận", "Người mua huỷ", "Người bán huỷ"],
+  "Đã xác nhận": ["Đang giao hàng", "Người bán huỷ"],
+  "Đang giao hàng": ["Giao hàng thành công", "Giao hàng thất bại"],
+  "Giao hàng thất bại": ["Người bán huỷ"],
+
+  // Các trạng thái MoMo
+  "Chờ thanh toán": ["Đã thanh toán", "Huỷ do quá thời gian thanh toán"],
+  "Đã thanh toán": ["Chờ xác nhận"], // Sau khi thanh toán mới được chuyển sang xử lý
+  "Huỷ do quá thời gian thanh toán": [],
+
+  // Các trạng thái cuối
+  "Giao hàng thành công": [], // không được chuyển tiếp
+  "Người mua huỷ": [],
+  "Người bán huỷ": [],
+};
+
 export const updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -211,31 +228,48 @@ export const updateOrderStatus = async (req, res) => {
         .json({ message: "Vui lòng cung cấp thông tin cần cập nhật" });
     }
 
-    // Xây dựng object update
+    // 1. Tìm đơn hàng hiện tại
+    const order = await Order.findById(id);
+    if (!order) {
+      return res.status(404).json({ message: "Đơn hàng không tồn tại" });
+    }
+
+    // 2. Kiểm tra trạng thái được phép chuyển đổi
+    if (status) {
+      const currentStatus = order.status;
+      const allowedNextStatuses = allowedStatusTransitions[currentStatus] || [];
+
+      if (!allowedNextStatuses.includes(status)) {
+        return res.status(400).json({
+          message: `Không thể chuyển trạng thái từ "${currentStatus}" sang "${status}".`,
+        });
+      }
+    }
+
+    // 3. Chuẩn bị dữ liệu cập nhật
     const updateData = {};
     if (status) updateData.status = status;
     if (user && typeof user === "object") {
-      // Chỉ cập nhật các trường name, phone, address nếu có
       if (user.name) updateData["user.name"] = user.name;
       if (user.phone) updateData["user.phone"] = user.phone;
       if (user.address) updateData["user.address"] = user.address;
     }
 
-    const order = await Order.findByIdAndUpdate(
+    // 4. Cập nhật đơn hàng
+    const updatedOrder = await Order.findByIdAndUpdate(
       id,
       { $set: updateData },
       { new: true }
     ).populate("items.productVariantId");
 
-    if (!order) {
-      return res.status(404).json({ message: "Đơn hàng không tồn tại" });
-    }
-
     return res.status(200).json({
       message: "Cập nhật đơn hàng thành công",
-      data: order,
+      data: updatedOrder,
     });
   } catch (error) {
-    return res.status(400).json({ message: error.message });
+    console.error("Lỗi cập nhật đơn hàng:", error);
+    return res
+      .status(500)
+      .json({ message: "Có lỗi xảy ra, vui lòng thử lại sau" });
   }
 };
