@@ -14,8 +14,8 @@ import {
   verifyCode,
   resendCode,
   setDefaultAddress,
-  deleteShippingAddress
-
+  deleteShippingAddress,
+  getLoginHistory
 } from "../controllers/auth.js";
 import { checkAuth } from "../middlewares/checkAuth.js";
 
@@ -23,6 +23,7 @@ const router = Router();
 
 router.post("/register", register);
 router.post("/login", login);
+router.get("/login-history/:userId", getLoginHistory);
 router.post("/logout", logout);
 router.post("/info", checkAuth, info);
 router.get("/shipping-address/:id", checkAuth, getShippingAddressMainByUserId);

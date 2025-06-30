@@ -97,7 +97,6 @@ const registerSchema = new Schema(
     isVerified: { type: Boolean, default: false },
     verificationExpires: { type: Date, default: "" },
   },
-
   {
     timestamps: true,
     versionKey: false,
