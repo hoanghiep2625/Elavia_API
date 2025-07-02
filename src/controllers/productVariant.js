@@ -8,7 +8,7 @@ import {
   productVariantSchema,
   patchProductVariantSchema,
 } from "../schemaValidations/variant.schema.js";
-
+import Product from "../models/product.js";
 const uploadImageToCloudinary = async (file) => {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
@@ -319,7 +319,7 @@ export const updateProductVariant = async (req, res) => {
           updateFields[key] = variantData[key];
         }
       }
-
+      
       const updatedVariant = await ProductVariant.findByIdAndUpdate(
         req.params.id,
         updateFields,
@@ -518,5 +518,35 @@ export const deleteProductVariantBulkDelete = async (req, res) => {
     });
   } catch (error) {
     return res.status(400).json({ message: error.message });
+  }
+};
+
+export const getRelatedVariantsByVariant = async (req, res) => {
+  try {
+    const { variantId } = req.params;
+
+    const variant = await ProductVariant.findById(variantId);
+    if (!variant) return res.status(404).json({ message: "Không tìm thấy variant" });
+
+    const product = await Product.findById(variant.productId);
+    if (!product) return res.status(404).json({ message: "Không tìm thấy sản phẩm" });
+
+    const relatedProducts = await Product.find({
+      categoryId: product.categoryId,
+      _id: { $ne: product._id },
+    });
+
+    const relatedProductIds = relatedProducts.map(p => p._id);
+
+    const relatedVariants = await ProductVariant.find({
+      productId: { $in: relatedProductIds },
+      "color.baseColor": variant.color?.baseColor,
+    }).limit(20) 
+      .populate("productId");
+
+    res.json(relatedVariants);
+  } catch (error) {
+    console.error("Lỗi khi lấy variant liên quan:", error);
+    res.status(500).json({ message: "Lỗi server", error });
   }
 };
