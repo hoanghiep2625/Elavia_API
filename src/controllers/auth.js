@@ -193,13 +193,14 @@ export const login = async (req, res) => {
   }
 };
 
-export const getLoginHistory = async (req, res) => {
+export const getLoginHistoryByUserId = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
+    const userId = req.user.id;
 
     const historyDoc = await LoginHistory.findOne({
-      userId: req.params.userId,
+      userId,
     });
 
     if (!historyDoc || !historyDoc.logins) {

@@ -102,31 +102,23 @@ export const updateAttribute = async (req, res) => {
     }
     console.log("Parsed data:", result.data);
 
-    const { name, slug, values } = result.data;
+    const { name, values } = result.data;
     const updateFields = {};
 
     // Prepare update fields
     if (name !== undefined) updateFields.name = name;
     if (values !== undefined) updateFields.values = values;
 
-    // Handle slug update with uniqueness check
-    if (
-      slug !== undefined &&
-      slug !== (await Attribute.findById(req.params.id)).slug
-    ) {
-      const existingSlug = await Attribute.findOne({ slug });
-      if (existingSlug && existingSlug._id.toString() !== req.params.id) {
-        return res.status(400).json({ message: "Slug đã tồn tại" });
-      }
-      updateFields.slug = slug;
-      console.log("Updating slug to:", slug);
+    const currentAttr = await Attribute.findById(req.params.id);
+    if (!currentAttr) {
+      return res.status(404).json({ message: "Thuộc tính không tồn tại" });
     }
 
-    // Validate updated fields
     const tempAttribute = new Attribute({
-      ...(await Attribute.findById(req.params.id)),
+      ...currentAttr.toObject(), // chuyển document thành plain object
       ...updateFields,
     });
+
     const validationError = tempAttribute.validateSync();
     if (validationError) {
       const errors = Object.values(validationError.errors).map(
@@ -154,12 +146,10 @@ export const updateAttribute = async (req, res) => {
     });
   } catch (err) {
     console.error("Error updating attribute:", err);
-    return res
-      .status(500)
-      .json({
-        message: "Lỗi server khi cập nhật thuộc tính",
-        error: err.message,
-      });
+    return res.status(500).json({
+      message: "Lỗi server khi cập nhật thuộc tính",
+      error: err.message,
+    });
   }
 };
 
