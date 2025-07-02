@@ -162,22 +162,33 @@ export const updateProduct = async (req, res) => {
 // Xóa sản phẩm
 export const deleteProduct = async (req, res) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: "Invalid product ID" });
     }
 
-    const product = await Product.findByIdAndDelete(req.params.id);
+    // Kiểm tra xem có variant nào liên quan không
+    const variantCount = await ProductVariant.countDocuments({ productId: id });
+    if (variantCount > 0) {
+      return res.status(400).json({
+        message: "Không thể xóa sản phẩm vì vẫn còn biến thể liên quan",
+      });
+    }
+
+    const product = await Product.findByIdAndDelete(id);
     if (!product) {
       return res.status(404).json({ message: "Sản phẩm không tồn tại" });
     }
-    await ProductVariant.deleteMany({ productId: req.params.id });
+
     return res.status(200).json({
       message: "Xóa sản phẩm thành công",
       data: product,
     });
   } catch (error) {
-    return res.status(400).json({
-      message: error.message,
+    return res.status(500).json({
+      message: "Lỗi server khi xóa sản phẩm",
+      error: error.message,
     });
   }
 };
