@@ -319,7 +319,7 @@ export const updateProductVariant = async (req, res) => {
           updateFields[key] = variantData[key];
         }
       }
-      
+
       const updatedVariant = await ProductVariant.findByIdAndUpdate(
         req.params.id,
         updateFields,
@@ -524,27 +524,51 @@ export const deleteProductVariantBulkDelete = async (req, res) => {
 export const getRelatedVariantsByVariant = async (req, res) => {
   try {
     const { variantId } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
 
     const variant = await ProductVariant.findById(variantId);
-    if (!variant) return res.status(404).json({ message: "Không tìm thấy variant" });
+    if (!variant) {
+      return res.status(404).json({ message: "Không tìm thấy variant" });
+    }
 
     const product = await Product.findById(variant.productId);
-    if (!product) return res.status(404).json({ message: "Không tìm thấy sản phẩm" });
+    if (!product) {
+      return res.status(404).json({ message: "Không tìm thấy sản phẩm" });
+    }
 
+    // Tìm các sản phẩm cùng category nhưng khác sản phẩm hiện tại
     const relatedProducts = await Product.find({
       categoryId: product.categoryId,
       _id: { $ne: product._id },
     });
 
-    const relatedProductIds = relatedProducts.map(p => p._id);
+    const relatedProductIds = relatedProducts.map((p) => p._id);
 
+    // Đếm tổng số variants
+    const total = await ProductVariant.countDocuments({
+      productId: { $in: relatedProductIds },
+      "color.baseColor": variant.color?.baseColor,
+    });
+
+    // Lấy các variants liên quan
     const relatedVariants = await ProductVariant.find({
       productId: { $in: relatedProductIds },
       "color.baseColor": variant.color?.baseColor,
-    }).limit(20) 
+    })
+      .skip(skip)
+      .limit(limit)
       .populate("productId");
 
-    res.json(relatedVariants);
+    const totalPages = Math.ceil(total / limit);
+
+    return res.status(200).json({
+      data: relatedVariants,
+      total,
+      currentPage: page,
+      totalPages,
+    });
   } catch (error) {
     console.error("Lỗi khi lấy variant liên quan:", error);
     res.status(500).json({ message: "Lỗi server", error });
