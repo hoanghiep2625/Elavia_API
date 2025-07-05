@@ -424,7 +424,7 @@ export const changePassword = async (req, res) => {
     }
 
     const { oldPassword, newPassword } = result.data;
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user.id).select("password");
     if (!user) {
       return res.status(404).json({ message: "Người dùng không tồn tại" });
     }
@@ -455,7 +455,9 @@ export const updateUserInfo = async (req, res) => {
       return res.status(400).json({ errors: result.error.format() });
     }
 
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user.id).select(
+      "first_name name phone date sex"
+    );;
     if (!user) {
       return res.status(404).json({ message: "Người dùng không tồn tại" });
     }
@@ -466,6 +468,7 @@ export const updateUserInfo = async (req, res) => {
     user.date = result.data.date || user.date;
     user.sex = result.data.sex || user.sex;
 
+    
     await user.save();
 
     return res.status(200).json({
