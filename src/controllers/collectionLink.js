@@ -4,7 +4,7 @@ import crypto from "crypto";
 import dotenv from "dotenv";
 import CryptoJS from "crypto-js";
 import Voucher from "../models/vocher.js";
-import { getShippingFeeOrder } from "../controllers/shippingFee.js";
+import { getShippingFeeOrder } from "./shippingApi.js";
 dotenv.config();
 
 // ZaloPay Configuration

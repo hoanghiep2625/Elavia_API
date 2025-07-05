@@ -8,7 +8,7 @@ import {
   getCartQuantity,
   updateCart,
 } from "../controllers/cart.js";
-import { getShippingFee } from "../controllers/shippingFee.js";
+import { getShippingFee } from "../controllers/shippingApi.js";
 import { checkAuth } from "../middlewares/checkAuth.js";
 
 const router = Router();

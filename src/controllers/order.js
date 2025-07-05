@@ -1,6 +1,6 @@
 import Order from "../models/order.js";
 import Voucher from "../models/vocher.js";
-import { getShippingFeeOrder } from "../controllers/shippingFee.js"; // Assuming this is the correct path to your GHN utility functions
+import { getShippingFeeOrder } from "./shippingApi.js"; // Assuming this is the correct path to your GHN utility functions
 export const createOrder = async (req, res) => {
   try {
     const {
@@ -29,7 +29,7 @@ export const createOrder = async (req, res) => {
       !receiver ||
       !receiver.cityName ||
       !receiver.districtName ||
-      !receiver.communeName
+      !receiver.wardName
     ) {
       return res.status(400).json({ message: "Thiếu thông tin người nhận" });
     }

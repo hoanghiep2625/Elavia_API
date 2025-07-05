@@ -32,7 +32,7 @@ const shippingAddressSchema = new Schema({
     type: locationSchema,
     required: true,
   },
-  commune: {
+  ward: {
     type: locationSchema,
     required: true,
   },

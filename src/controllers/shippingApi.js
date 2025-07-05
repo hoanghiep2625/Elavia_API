@@ -7,7 +7,8 @@ import {
 
 export const getShippingFee = async (req, res) => {
   try {
-    let { cityName, districtName, wardName } = req.body;
+    let { cityName, districtName, wardName, insurance_value, total_weight } =
+      req.body;
 
     if (!cityName || !districtName || !wardName) {
       return res.status(400).json({ message: "Thiếu thông tin địa chỉ" });
@@ -40,6 +41,8 @@ export const getShippingFee = async (req, res) => {
     const fee = await calculateShippingFee({
       to_district_id: district.DistrictID,
       to_ward_code: ward.WardCode,
+      insurance_value,
+      weight: total_weight || 500,
     });
 
     return res.json({ shippingFee: fee });
@@ -50,13 +53,11 @@ export const getShippingFee = async (req, res) => {
 };
 
 export const getShippingFeeOrder = async (receiver) => {
-  let { cityName, districtName, communeName } = receiver;
+  let { cityName, districtName, wardName } = receiver;
 
-  if (!cityName || !districtName || !communeName) {
+  if (!cityName || !districtName || !wardName) {
     throw new Error("Thiếu thông tin địa chỉ");
   }
-
-  // ✅ Loại bỏ tiền tố "Tỉnh" hoặc "Thành phố"
   cityName = cityName.replace(/^(Tỉnh|Thành phố)\s+/i, "").trim();
 
   const provinces = await getProvinces();
@@ -72,7 +73,7 @@ export const getShippingFeeOrder = async (receiver) => {
   if (!district) throw new Error("Không tìm thấy quận/huyện");
 
   const wards = await getWards(district.DistrictID);
-  const ward = wards.find((w) => w.WardName === communeName);
+  const ward = wards.find((w) => w.WardName === wardName);
   if (!ward) throw new Error("Không tìm thấy phường/xã");
 
   const fee = await calculateShippingFee({

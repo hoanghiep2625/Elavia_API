@@ -10,7 +10,7 @@ export const shippingAddressSchema = z.object({
   phone: z.string().min(1, "Số điện thoại không hợp lệ"),
   city: locationSchema,
   district: locationSchema,
-  commune: locationSchema,
+  ward: locationSchema,
   address: z.string().min(2, "Địa chỉ tối thiểu 2 ký tự"),
   type: z.enum(["home", "company"]),
 });

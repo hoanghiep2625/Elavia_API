@@ -69,7 +69,7 @@ export const OrderSchema = new Schema(
       address: { type: String, required: true },
       cityName: String,
       districtName: String,
-      communeName: String,
+      wardName: String,
     },
     items: [OrderItemSchema],
     totalPrice: {
