@@ -153,11 +153,6 @@ export const applyVoucher = async (req, res) => {
         discount = Math.min(discount, voucher.maxDiscount);
       }
     }
-
-    voucher.quantity -= 1;
-    voucher.usedBy.push(userId);
-    await voucher.save();
-
     res.json({ success: true, discount, voucherId: voucher._id });
   } catch (err) {
     if (err.name === "ZodError") {

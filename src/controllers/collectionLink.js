@@ -3,6 +3,8 @@ import axios from "axios";
 import crypto from "crypto";
 import dotenv from "dotenv";
 import CryptoJS from "crypto-js";
+import Voucher from "../models/vocher.js";
+import { getShippingFeeOrder } from "../controllers/shippingFee.js";
 dotenv.config();
 
 // ZaloPay Configuration
@@ -19,43 +21,73 @@ const zalopayConfig = {
  */
 export const createMomoPayment = async (req, res) => {
   try {
-    // Lấy thông tin cần thiết từ request body, sử dụng totalAmount làm amount
-    const { totalAmount, orderId, orderInfo, extraData, orderGroupId } =
-      req.body;
-    const amount = totalAmount;
+    const {
+      orderId,
+      items,
+      totalPrice,
+      receiver,
+      voucherCode = "",
+      orderInfo = "",
+      extraData = "",
+      orderGroupId = "",
+    } = req.body;
 
-    // Các tham số cấu hình
+    // Validate cơ bản
+    if (
+      !orderId ||
+      !items ||
+      !Array.isArray(items) ||
+      items.length === 0 ||
+      !receiver
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Thiếu thông tin tạo đơn hàng MoMo" });
+    }
+
+    // 1. Tính phí vận chuyển
+    const shippingFee = await getShippingFeeOrder(receiver);
+
+    // 2. Tính discount nếu có
+    let discountAmount = 0;
+    if (voucherCode) {
+      const voucher = await Voucher.findOne({ code: voucherCode });
+      if (
+        voucher &&
+        voucher.isActive &&
+        (!voucher.expiresAt || new Date(voucher.expiresAt) > new Date()) &&
+        voucher.quantity > 0 &&
+        totalPrice >= (voucher.minOrderValue || 0)
+      ) {
+        if (voucher.type === "percent") {
+          discountAmount = (totalPrice * voucher.value) / 100;
+          if (voucher.maxDiscount) {
+            discountAmount = Math.min(discountAmount, voucher.maxDiscount);
+          }
+        } else if (voucher.type === "fixed") {
+          discountAmount = voucher.value;
+        }
+      }
+    }
+
+    // 3. Tính số tiền cuối cùng
+    const amount = totalPrice + shippingFee - discountAmount;
+    if (amount <= 0) {
+      return res
+        .status(400)
+        .json({ message: "Tổng tiền thanh toán không hợp lệ" });
+    }
+
+    // 4. Tạo chữ ký MoMo
     const accessKey = process.env.MOMO_ACCESSKEY;
     const secretKey = process.env.MOMO_SECRETKEY;
     const partnerCode = process.env.MOMO_PARTNER_CODE;
-    // Sửa redirectUrl để trỏ về frontend thay vì API endpoint
-    const redirectUrl = `${process.env.URL}`;
+    const redirectUrl = `${process.env.MOMO_REDIRECT_URL}`;
     const ipnUrl = `${process.env.URL}/api/orders/momo/callback`;
     const requestType = "payWithMethod";
-    const generatedOrderId = orderId || partnerCode + new Date().getTime();
-    const requestId = generatedOrderId;
+    const requestId = orderId;
 
-    const rawSignature =
-      "accessKey=" +
-      accessKey +
-      "&amount=" +
-      amount +
-      "&extraData=" +
-      extraData +
-      "&ipnUrl=" +
-      ipnUrl +
-      "&orderId=" +
-      generatedOrderId +
-      "&orderInfo=" +
-      orderInfo +
-      "&partnerCode=" +
-      partnerCode +
-      "&redirectUrl=" +
-      redirectUrl +
-      "&requestId=" +
-      requestId +
-      "&requestType=" +
-      requestType;
+    const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&ipnUrl=${ipnUrl}&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
 
     const signature = crypto
       .createHmac("sha256", secretKey)
@@ -68,7 +100,7 @@ export const createMomoPayment = async (req, res) => {
       storeId: "MomoTestStore",
       requestId,
       amount,
-      orderId: generatedOrderId,
+      orderId,
       orderInfo,
       redirectUrl,
       ipnUrl,
@@ -79,24 +111,31 @@ export const createMomoPayment = async (req, res) => {
       orderGroupId,
       signature,
     };
-
-    const response = await axios({
-      method: "post",
-      url: "https://test-payment.momo.vn/v2/gateway/api/create",
-      headers: { "Content-Type": "application/json" },
-      data: requestBody,
+    console.log("👉 DEBUG MoMo", {
+      accessKey,
+      secretKey,
+      partnerCode,
+      redirectUrl,
+      ipnUrl,
+      rawSignature,
+      signature,
     });
 
-    console.log("MoMo Payment Response:", response.data);
+    const response = await axios.post(
+      "https://test-payment.momo.vn/v2/gateway/api/create",
+      requestBody,
+      { headers: { "Content-Type": "application/json" } }
+    );
+
     return res.status(200).json(response.data);
   } catch (error) {
     console.error(
       "Error in createMomoPayment:",
-      error.response ? error.response.data : error.message
+      error.response?.data || error.message
     );
     return res.status(500).json({
-      message: "Error creating MoMo payment",
-      error: error.response ? error.response.data : error.message,
+      message: "Lỗi tạo thanh toán MoMo",
+      error: error.response?.data || error.message,
     });
   }
 };
@@ -184,32 +223,84 @@ export const transactionMomoPayment = async (req, res) => {
  */
 export const createZalopayPayment = async (req, res) => {
   try {
-    const { totalAmount, orderId, orderInfo } = req.body;
+    const {
+      orderId,
+      receiver,
+      items,
+      totalPrice,
+      voucherCode,
+      orderInfo = "",
+    } = req.body;
 
+    // Validate bắt buộc
+    if (!orderId || !receiver || !items || !totalPrice) {
+      return res.status(400).json({ message: "Thiếu thông tin đơn hàng" });
+    }
+
+    // Tính phí vận chuyển
+    const shippingFee = await getShippingFeeOrder(receiver);
+
+    // Tính giảm giá nếu có mã voucher
+    let discountAmount = 0;
+    if (voucherCode) {
+      const voucher = await Voucher.findOne({ code: voucherCode });
+      if (!voucher)
+        return res.status(400).json({ message: "Mã giảm giá không hợp lệ" });
+      if (!voucher.isActive || voucher.expiresAt < new Date())
+        return res
+          .status(400)
+          .json({ message: "Voucher không hợp lệ hoặc đã hết hạn" });
+      if (voucher.minOrderValue && totalPrice < voucher.minOrderValue)
+        return res
+          .status(400)
+          .json({ message: "Không đủ điều kiện dùng voucher" });
+
+      // Tính giảm giá
+      if (voucher.type === "percent") {
+        discountAmount = Math.min(
+          (voucher.value / 100) * totalPrice,
+          voucher.maxDiscount || Infinity
+        );
+      } else if (voucher.type === "fixed") {
+        discountAmount = voucher.value;
+      }
+    }
+
+    const finalAmount = totalPrice + shippingFee - discountAmount;
+    if (finalAmount <= 0) {
+      return res.status(400).json({ message: "Tổng tiền không hợp lệ" });
+    }
+
+    // Chuẩn bị dữ liệu ZaloPay
     const embed_data = {
-      redirecturl: process.env.ZALOPAY_REDIRECT_URL,
+      redirecturl: `${process.env.ZALOPAY_REDIRECT_URL}/${orderId}`,
     };
 
+    const transID = orderId;
+    const app_time = Date.now();
     const order = {
       app_id: zalopayConfig.app_id,
-      app_trans_id: orderId,
-      app_user: orderId || "user123",
-      app_time: Date.now(),
-      item: JSON.stringify([]),
+      app_trans_id: transID,
+      app_user: transID,
+      app_time,
+      item: JSON.stringify([]), // hoặc truyền sản phẩm nếu muốn
       embed_data: JSON.stringify(embed_data),
-      amount: totalAmount,
+      amount: finalAmount,
       callback_url: `${process.env.URL}/api/orders/zalopay/callback`,
       description: orderInfo || `Payment for order #${transID}`,
       bank_code: "",
     };
 
-    // appid|app_trans_id|appuser|amount|apptime|embeddata|item
-    const data = `${zalopayConfig.app_id}|${order.app_trans_id}|${order.app_user}|${order.amount}|${order.app_time}|${order.embed_data}|${order.item}`;
+    const data =
+      `${order.app_id}|${order.app_trans_id}|${order.app_user}|` +
+      `${order.amount}|${order.app_time}|${order.embed_data}|${order.item}`;
+
     order.mac = CryptoJS.HmacSHA256(data, zalopayConfig.key1).toString();
 
     const result = await axios.post(zalopayConfig.endpoint, null, {
       params: order,
     });
+
     return res.status(200).json(result.data);
   } catch (error) {
     console.error("Error in createZalopayPayment:", error);

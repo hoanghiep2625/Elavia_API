@@ -1,29 +1,111 @@
 import Order from "../models/order.js";
+import Voucher from "../models/vocher.js";
+import { getShippingFeeOrder } from "../controllers/shippingFee.js"; // Assuming this is the correct path to your GHN utility functions
 export const createOrder = async (req, res) => {
   try {
     const {
       orderId,
-      user,
+      receiver,
       items,
-      totalAmount,
+      totalPrice,
       paymentMethod,
+      voucherCode,
       orderInfo = "",
       extraData = "",
       orderGroupId = "",
       paymentUrl = "",
     } = req.body;
 
+    const user = {
+      _id: req.user.id,
+      email: req.user.email,
+    };
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: "Giỏ hàng trống" });
+    }
+
+    if (
+      !receiver ||
+      !receiver.cityName ||
+      !receiver.districtName ||
+      !receiver.communeName
+    ) {
+      return res.status(400).json({ message: "Thiếu thông tin người nhận" });
+    }
+
+    const shippingFee = await getShippingFeeOrder(receiver);
+
+    let appliedVoucher = null;
+    let discountAmount = 0;
+
+    if (voucherCode) {
+      const voucher = await Voucher.findOne({ code: voucherCode });
+
+      if (!voucher) {
+        return res.status(400).json({ message: "Mã giảm giá không hợp lệ" });
+      }
+      if (!voucher.isActive) {
+        return res
+          .status(400)
+          .json({ message: "Mã giảm giá đã bị vô hiệu hóa" });
+      }
+      if (voucher.expiresAt && new Date(voucher.expiresAt) < new Date()) {
+        return res.status(400).json({ message: "Mã giảm giá đã hết hạn" });
+      }
+      if (voucher.quantity <= 0) {
+        return res
+          .status(400)
+          .json({ message: "Mã giảm giá đã hết lượt sử dụng" });
+      }
+      if (voucher.usedBy.includes(req.user.id)) {
+        return res.status(400).json({ message: "Bạn đã sử dụng mã này rồi" });
+      }
+      if (totalPrice < (voucher.minOrderValue || 0)) {
+        return res
+          .status(400)
+          .json({ message: "Không đủ điều kiện áp dụng mã giảm giá" });
+      }
+
+      appliedVoucher = voucher;
+
+      if (voucher.type === "percent") {
+        discountAmount = (totalPrice * voucher.value) / 100;
+        if (voucher.maxDiscount) {
+          discountAmount = Math.min(discountAmount, voucher.maxDiscount);
+        }
+      } else if (voucher.type === "fixed") {
+        discountAmount = voucher.value;
+      }
+    }
+
+    const finalAmount = totalPrice + shippingFee - discountAmount;
+
+    if (finalAmount < 0) {
+      return res.status(400).json({ message: "Tổng tiền không hợp lệ" });
+    }
     const orderData = {
       orderId,
       user,
+      receiver,
       items,
-      totalAmount,
+      totalPrice,
+      shippingFee,
+      discountAmount,
+      finalAmount,
       paymentMethod,
       orderInfo,
       extraData,
       orderGroupId,
       paymentUrl,
-      // Nếu là MoMo hoặc zalopay thì mặc định "Chờ thanh toán", nếu COD thì "Chờ xác nhận"
+      voucher: appliedVoucher
+        ? {
+            code: appliedVoucher.code,
+            value: appliedVoucher.value,
+            type: appliedVoucher.type,
+            maxDiscount: appliedVoucher.maxDiscount,
+          }
+        : null,
       status:
         paymentMethod === "MoMo" || paymentMethod === "zalopay"
           ? "Chờ thanh toán"
@@ -32,16 +114,26 @@ export const createOrder = async (req, res) => {
 
     const order = new Order(orderData);
     await order.save();
-    return res
-      .status(201)
-      .json({ message: "Order created successfully", order });
+
+    if (appliedVoucher) {
+      appliedVoucher.usedBy.push(req.user.id);
+      appliedVoucher.quantity -= 1;
+      await appliedVoucher.save();
+    }
+
+    return res.status(201).json({
+      message: "Order created successfully",
+      order,
+    });
   } catch (error) {
     console.error("Error in createOrder:", error);
-    return res
-      .status(500)
-      .json({ message: "Error creating order", error: error.message });
+    return res.status(500).json({
+      message: "Error creating order",
+      error: error.message,
+    });
   }
 };
+
 export const cancelOrder = async (req, res) => {
   try {
     const { orderId, cancelBy } = req.body;

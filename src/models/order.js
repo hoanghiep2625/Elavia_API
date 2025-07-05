@@ -3,7 +3,6 @@ import mongoosePaginate from "mongoose-paginate-v2";
 
 const { Schema } = mongoose;
 
-// Schema chi tiết sản phẩm trong đơn hàng
 export const OrderItemSchema = new Schema(
   {
     productVariantId: {
@@ -53,27 +52,47 @@ export const OrderSchema = new Schema(
       unique: true,
     },
     user: {
-      name: {
-        type: String,
+      _id: {
+        type: Schema.Types.ObjectId,
+        ref: "User",
         required: true,
       },
       email: {
         type: String,
         required: true,
       },
-      phone: {
-        type: String,
-        required: true,
-      },
-      address: {
-        type: String,
-        required: true,
-      },
+    },
+    receiver: {
+      type: { type: String, enum: ["home", "company"] },
+      name: { type: String, required: true },
+      phone: { type: String, required: true },
+      address: { type: String, required: true },
+      cityName: String,
+      districtName: String,
+      communeName: String,
     },
     items: [OrderItemSchema],
-    totalAmount: {
+    totalPrice: {
       type: Number,
       required: true,
+    },
+    shippingFee: {
+      type: Number,
+      default: 0,
+    },
+    discountAmount: {
+      type: Number,
+      default: 0,
+    },
+    finalAmount: {
+      type: Number,
+      required: true,
+    },
+    voucher: {
+      code: { type: String },
+      type: { type: String, enum: ["fixed", "percent"] },
+      value: { type: Number },
+      maxDiscount: { type: Number },
     },
     paymentMethod: {
       type: String,

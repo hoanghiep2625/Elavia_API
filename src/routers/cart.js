@@ -8,6 +8,7 @@ import {
   getCartQuantity,
   updateCart,
 } from "../controllers/cart.js";
+import { getShippingFee } from "../controllers/shippingFee.js";
 import { checkAuth } from "../middlewares/checkAuth.js";
 
 const router = Router();
@@ -21,5 +22,6 @@ router.put("/update", updateCartQuantity);
 router.get("/", getCart);
 router.get("/clear", clearCart);
 router.get("/quantity", getCartQuantity);
+router.post("/fee", getShippingFee);
 
 export default router;
