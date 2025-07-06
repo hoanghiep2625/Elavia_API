@@ -7,8 +7,16 @@ import {
 
 export const getShippingFee = async (req, res) => {
   try {
-    let { cityName, districtName, wardName, insurance_value, total_weight } =
-      req.body;
+    let {
+      cityName,
+      districtName,
+      wardName,
+      insurance_value,
+      total_weight,
+      total_height,
+      total_length,
+      total_width,
+    } = req.body;
 
     if (!cityName || !districtName || !wardName) {
       return res.status(400).json({ message: "Thiếu thông tin địa chỉ" });
@@ -43,6 +51,9 @@ export const getShippingFee = async (req, res) => {
       to_ward_code: ward.WardCode,
       insurance_value,
       weight: total_weight || 500,
+      height: total_height || 4,
+      length: total_length || 25,
+      width: total_width || 20,
     });
 
     return res.json({ shippingFee: fee });
@@ -52,12 +63,21 @@ export const getShippingFee = async (req, res) => {
   }
 };
 
-export const getShippingFeeOrder = async (receiver) => {
+export const getShippingFeeOrder = async (
+  receiver,
+  insurance_value,
+  total_weight,
+  total_height,
+  total_length,
+  total_width
+) => {
   let { cityName, districtName, wardName } = receiver;
 
   if (!cityName || !districtName || !wardName) {
     throw new Error("Thiếu thông tin địa chỉ");
   }
+
+  // Làm sạch tên tỉnh
   cityName = cityName.replace(/^(Tỉnh|Thành phố)\s+/i, "").trim();
 
   const provinces = await getProvinces();
@@ -65,7 +85,6 @@ export const getShippingFeeOrder = async (receiver) => {
     (p) =>
       p.ProvinceName.replace(/^(Tỉnh|Thành phố)\s+/i, "").trim() === cityName
   );
-
   if (!province) throw new Error("Không tìm thấy tỉnh/thành");
 
   const districts = await getDistricts(province.ProvinceID);
@@ -79,7 +98,11 @@ export const getShippingFeeOrder = async (receiver) => {
   const fee = await calculateShippingFee({
     to_district_id: district.DistrictID,
     to_ward_code: ward.WardCode,
+    insurance_value: insurance_value || 0,
+    weight: total_weight || 500,
+    height: total_height || 4,
+    length: total_length || 25,
+    width: total_width || 20,
   });
-
   return fee;
 };

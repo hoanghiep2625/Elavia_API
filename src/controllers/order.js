@@ -1,6 +1,41 @@
 import Order from "../models/order.js";
 import Voucher from "../models/vocher.js";
-import { getShippingFeeOrder } from "./shippingApi.js"; // Assuming this is the correct path to your GHN utility functions
+import { getShippingFeeOrder } from "./shippingApi.js";
+export const calculateShippingInfoFromCart = (items) => {
+  const validItems = items.filter((item) => {
+    return (
+      item &&
+      item.productVariantId &&
+      item.price &&
+      item.quantity &&
+      !isNaN(Number(item.price))
+    );
+  });
+
+  const insurance_value = validItems.reduce((sum, item) => {
+    return sum + Number(item.price) * item.quantity;
+  }, 0);
+
+  const total_weight = validItems.reduce((sum, item) => {
+    return sum + item.quantity * 300; // 300g mỗi sản phẩm (có thể chỉnh)
+  }, 0);
+
+  const total_height = validItems.reduce((sum, item) => {
+    return sum + item.quantity * 4;
+  }, 0);
+
+  const total_length = 25;
+  const total_width = 20;
+
+  return {
+    insurance_value,
+    total_weight,
+    total_height,
+    total_length,
+    total_width,
+  };
+};
+
 export const createOrder = async (req, res) => {
   try {
     const {
@@ -33,8 +68,22 @@ export const createOrder = async (req, res) => {
     ) {
       return res.status(400).json({ message: "Thiếu thông tin người nhận" });
     }
+    const {
+      insurance_value,
+      total_weight,
+      total_height,
+      total_length,
+      total_width,
+    } = calculateShippingInfoFromCart(items);
 
-    const shippingFee = await getShippingFeeOrder(receiver);
+    const shippingFee = await getShippingFeeOrder(
+      receiver,
+      insurance_value,
+      total_weight,
+      total_height,
+      total_length,
+      total_width
+    );
 
     let appliedVoucher = null;
     let discountAmount = 0;
@@ -312,7 +361,7 @@ const allowedStatusTransitions = {
 export const updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, receiver } = req.body; 
+    const { status, receiver } = req.body;
 
     if (!status && !receiver) {
       return res
@@ -345,9 +394,12 @@ export const updateOrderStatus = async (req, res) => {
       if (receiver.name) updateData["receiver.name"] = receiver.name;
       if (receiver.phone) updateData["receiver.phone"] = receiver.phone;
       if (receiver.address) updateData["receiver.address"] = receiver.address;
-      if (receiver.wardName) updateData["receiver.wardName"] = receiver.wardName;
-      if (receiver.districtName) updateData["receiver.districtName"] = receiver.districtName;
-      if (receiver.cityName) updateData["receiver.cityName"] = receiver.cityName;
+      if (receiver.wardName)
+        updateData["receiver.wardName"] = receiver.wardName;
+      if (receiver.districtName)
+        updateData["receiver.districtName"] = receiver.districtName;
+      if (receiver.cityName)
+        updateData["receiver.cityName"] = receiver.cityName;
     }
 
     // 4. Cập nhật đơn hàng

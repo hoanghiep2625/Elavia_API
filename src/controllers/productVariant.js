@@ -574,3 +574,120 @@ export const getRelatedVariantsByVariant = async (req, res) => {
     res.status(500).json({ message: "Lỗi server", error });
   }
 };
+export const getAllUniqueProductsFromVariants = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 12;
+    const skip = (page - 1) * limit;
+
+    // Lấy danh sách các productId không trùng lặp từ ProductVariant
+    const uniqueProductVariants = await ProductVariant.aggregate([
+      {
+        $group: {
+          _id: "$productId", // nhóm theo productId
+          variantId: { $first: "$_id" }, // lấy id bất kỳ đại diện cho variant đó
+        },
+      },
+      {
+        $skip: skip,
+      },
+      {
+        $limit: limit,
+      },
+    ]);
+
+    // Lấy danh sách variantId đại diện
+    const variantIds = uniqueProductVariants.map((item) => item.variantId);
+
+    // Tìm các variant đại diện và populate productId
+    const variants = await ProductVariant.find({
+      _id: { $in: variantIds },
+    }).populate("productId");
+
+    // Đếm tổng sản phẩm duy nhất
+    const totalUniqueProducts = await ProductVariant.distinct("productId");
+
+    const total = totalUniqueProducts.length;
+    const totalPages = Math.ceil(total / limit);
+
+    return res.status(200).json({
+      data: variants,
+      total,
+      currentPage: page,
+      totalPages,
+    });
+  } catch (error) {
+    console.error("Lỗi khi lấy danh sách sản phẩm không trùng:", error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+export const getAllRepresentativeVariants = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 12;
+    const skip = (page - 1) * limit;
+
+    // Lấy tất cả sản phẩm (có thể thêm filter nếu cần)
+    const products = await Product.find()
+      .select("_id representativeVariantId")
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    // Lấy variant đại diện cho từng sản phẩm
+    const variants = await Promise.all(
+      products.map(async (product) => {
+        let variant;
+        if (product.representativeVariantId) {
+          variant = await ProductVariant.findById(
+            product.representativeVariantId
+          )
+            .populate("productId")
+            .lean();
+        } else {
+          variant = await ProductVariant.findOne({ productId: product._id })
+            .sort({ createdAt: 1 })
+            .populate("productId")
+            .lean();
+        }
+        return variant;
+      })
+    );
+
+    // Loại bỏ sản phẩm không có variant nào
+    const filteredVariants = variants.filter(Boolean);
+
+    // Đếm tổng số sản phẩm (cho phân trang)
+    const total = await Product.countDocuments();
+    const totalPages = Math.ceil(total / limit);
+
+    return res.status(200).json({
+      data: filteredVariants,
+      totalPages,
+      currentPage: page,
+      total,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+export const getVariantByColor = async (req, res) => {
+  const { productId, actualColor } = req.body;
+  if (!productId || !actualColor) {
+    return res.status(400).json({ message: "Thiếu thông tin" });
+  }
+
+  const variant = await ProductVariant.findOne({
+    productId,
+    "color.actualColor": actualColor,
+  }).populate("productId");
+
+  if (!variant) {
+    return res.status(404).json({ message: "Không tìm thấy biến thể" });
+  }
+
+  return res.status(200).json({
+    ...variant.toObject(),
+    productName: variant.productId?.name || "",
+  });
+};

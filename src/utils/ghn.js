@@ -66,7 +66,6 @@ export const calculateShippingFee = async ({
     width: width || defaultShippingConfig.width,
     height: height || defaultShippingConfig.height,
   };
-  console.log("Shipping config:", config);
 
   const res = await ghnApi.post("/v2/shipping-order/fee", config);
   return res.data.data.total;

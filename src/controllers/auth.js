@@ -457,7 +457,7 @@ export const updateUserInfo = async (req, res) => {
 
     const user = await User.findById(req.user.id).select(
       "first_name name phone date sex"
-    );;
+    );
     if (!user) {
       return res.status(404).json({ message: "Người dùng không tồn tại" });
     }
@@ -468,7 +468,6 @@ export const updateUserInfo = async (req, res) => {
     user.date = result.data.date || user.date;
     user.sex = result.data.sex || user.sex;
 
-    
     await user.save();
 
     return res.status(200).json({
