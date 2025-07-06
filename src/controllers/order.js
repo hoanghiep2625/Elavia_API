@@ -149,11 +149,11 @@ export const createOrder = async (req, res) => {
       paymentUrl,
       voucher: appliedVoucher
         ? {
-            code: appliedVoucher.code,
-            value: appliedVoucher.value,
-            type: appliedVoucher.type,
-            maxDiscount: appliedVoucher.maxDiscount,
-          }
+          code: appliedVoucher.code,
+          value: appliedVoucher.value,
+          type: appliedVoucher.type,
+          maxDiscount: appliedVoucher.maxDiscount,
+        }
         : null,
       status:
         paymentMethod === "MoMo" || paymentMethod === "zalopay"
@@ -257,8 +257,8 @@ export const getAllOrders = async (req, res) => {
     // Tạo query tìm kiếm
     const query = {};
     if (_orderId) query.orderId = { $regex: _orderId, $options: "i" };
-    if (_user) query["user.name"] = { $regex: _user, $options: "i" };
-    if (_phone) query["user.phone"] = { $regex: _phone, $options: "i" };
+    if (_user) query["receiver.name"] = { $regex: _user, $options: "i" };
+    if (_phone) query["receiver.phone"] = { $regex: _phone, $options: "i" };
     if (_email) query["user.email"] = { $regex: _email, $options: "i" };
     if (_address) query["user.address"] = { $regex: _address, $options: "i" };
     if (_status && _status !== "Tất cả") query.status = _status;
