@@ -312,9 +312,9 @@ const allowedStatusTransitions = {
 export const updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, user } = req.body;
+    const { status, receiver } = req.body; 
 
-    if (!status && !user) {
+    if (!status && !receiver) {
       return res
         .status(400)
         .json({ message: "Vui lòng cung cấp thông tin cần cập nhật" });
@@ -330,7 +330,6 @@ export const updateOrderStatus = async (req, res) => {
     if (status) {
       const currentStatus = order.status;
       const allowedNextStatuses = allowedStatusTransitions[currentStatus] || [];
-
       if (!allowedNextStatuses.includes(status)) {
         return res.status(400).json({
           message: `Không thể chuyển trạng thái từ "${currentStatus}" sang "${status}".`,
@@ -341,10 +340,14 @@ export const updateOrderStatus = async (req, res) => {
     // 3. Chuẩn bị dữ liệu cập nhật
     const updateData = {};
     if (status) updateData.status = status;
-    if (user && typeof user === "object") {
-      if (user.name) updateData["user.name"] = user.name;
-      if (user.phone) updateData["user.phone"] = user.phone;
-      if (user.address) updateData["user.address"] = user.address;
+    // Chỉ cập nhật receiver
+    if (receiver && typeof receiver === "object") {
+      if (receiver.name) updateData["receiver.name"] = receiver.name;
+      if (receiver.phone) updateData["receiver.phone"] = receiver.phone;
+      if (receiver.address) updateData["receiver.address"] = receiver.address;
+      if (receiver.wardName) updateData["receiver.wardName"] = receiver.wardName;
+      if (receiver.districtName) updateData["receiver.districtName"] = receiver.districtName;
+      if (receiver.cityName) updateData["receiver.cityName"] = receiver.cityName;
     }
 
     // 4. Cập nhật đơn hàng
