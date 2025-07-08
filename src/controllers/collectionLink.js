@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import CryptoJS from "crypto-js";
 import Voucher from "../models/vocher.js";
 import { getShippingFeeOrder } from "./shippingApi.js";
+import { calculateShippingInfoFromCart } from "../controllers/order.js";
 dotenv.config();
 
 // ZaloPay Configuration
@@ -44,9 +45,23 @@ export const createMomoPayment = async (req, res) => {
         .status(400)
         .json({ message: "Thiếu thông tin tạo đơn hàng MoMo" });
     }
+    const {
+      insurance_value,
+      total_weight,
+      total_height,
+      total_length,
+      total_width,
+    } = calculateShippingInfoFromCart(items);
 
-    // 1. Tính phí vận chuyển
-    const shippingFee = await getShippingFeeOrder(receiver);
+    const shippingFee = await getShippingFeeOrder(
+      receiver,
+      insurance_value,
+      total_weight,
+      total_height,
+      total_length,
+      total_width
+    );
+    console.log("Shipping Fee:", shippingFee);
 
     // 2. Tính discount nếu có
     let discountAmount = 0;
@@ -237,9 +252,22 @@ export const createZalopayPayment = async (req, res) => {
       return res.status(400).json({ message: "Thiếu thông tin đơn hàng" });
     }
 
-    // Tính phí vận chuyển
-    const shippingFee = await getShippingFeeOrder(receiver);
+    const {
+      insurance_value,
+      total_weight,
+      total_height,
+      total_length,
+      total_width,
+    } = calculateShippingInfoFromCart(items);
 
+    const shippingFee = await getShippingFeeOrder(
+      receiver,
+      insurance_value,
+      total_weight,
+      total_height,
+      total_length,
+      total_width
+    );
     // Tính giảm giá nếu có mã voucher
     let discountAmount = 0;
     if (voucherCode) {

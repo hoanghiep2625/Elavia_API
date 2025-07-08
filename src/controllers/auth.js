@@ -3,7 +3,6 @@ import User from "../models/user.js";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import LoginHistory from "../models/loginHistory.js";
-import RecentlyViewed from "../models/recentlyViewed.js";
 import useragent from "useragent";
 import sendVerificationEmail from "../utils/sendVerificationEmail.js";
 import {
