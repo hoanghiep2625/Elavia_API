@@ -691,3 +691,92 @@ export const getVariantByColor = async (req, res) => {
     productName: variant.productId?.name || "",
   });
 };
+export const searchProducts = async (req, res) => {
+  try {
+    const {
+      sizes = [],
+      color,
+      priceRange,
+      attributes = {},
+      keyword = "",
+      page = 1,
+      limit = 12,
+    } = req.body;
+
+    const query = {
+      status: true,
+    };
+
+    // Price range fallback
+    if (
+      Array.isArray(priceRange) &&
+      priceRange.length === 2 &&
+      typeof priceRange[0] === "number" &&
+      typeof priceRange[1] === "number"
+    ) {
+      query.price = { $gte: priceRange[0], $lte: priceRange[1] };
+    } else {
+      query.price = { $gte: 0, $lte: 10000000 }; // fallback nếu không hợp lệ
+    }
+
+    // Màu sắc
+    if (color && typeof color === "string" && color.trim() !== "") {
+      query["color.baseColor"] = color;
+    }
+
+    // Size + còn hàng
+    if (Array.isArray(sizes) && sizes.length > 0) {
+      query.sizes = {
+        $elemMatch: {
+          size: { $in: sizes },
+          stock: { $gt: 0 },
+        },
+      };
+    }
+
+    // Keyword: tìm theo tên sản phẩm
+    if (keyword.trim()) {
+      const matchedProducts = await Product.find({
+        name: { $regex: keyword.trim(), $options: "i" },
+      }).select("_id");
+      const productIds = matchedProducts.map((p) => p._id);
+      query.productId = { $in: productIds };
+    }
+
+    if (
+      typeof attributes === "object" &&
+      Object.keys(attributes).some(
+        (k) => Array.isArray(attributes[k]) && attributes[k].length > 0
+      )
+    ) {
+      const attrFilters = Object.entries(attributes)
+        .filter(([_, values]) => Array.isArray(values) && values.length > 0)
+        .map(([attribute, values]) => ({
+          attributes: { $elemMatch: { attribute, value: { $in: values } } },
+        }));
+
+      if (attrFilters.length > 0) {
+        query.$and = [...(query.$and || []), ...attrFilters];
+      }
+    }
+
+    // Query sản phẩm variant
+    const variants = await ProductVariant.paginate(query, {
+      page,
+      limit,
+      populate: "productId",
+      sort: { createdAt: -1 },
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: variants.docs,
+      totalPages: variants.totalPages,
+      currentPage: variants.page,
+      total: variants.totalDocs,
+    });
+  } catch (error) {
+    console.error("Search error:", error);
+    res.status(500).json({ success: false, message: "Lỗi tìm kiếm sản phẩm" });
+  }
+};
