@@ -51,3 +51,53 @@ export const getReviewsByProductVariant = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+// Sửa đánh giá (chỉ cho phép sửa 1 lần)
+export const updateReview = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rating, comment, images } = req.body;
+
+    const review = await Review.findById(id);
+    if (!review) {
+      return res.status(404).json({ message: "Đánh giá không tồn tại." });
+    }
+    if (review.userId.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ message: "Bạn không có quyền sửa đánh giá này." });
+}
+    if (review.updatedCount >= 1) {
+      return res.status(400).json({ message: "Bạn chỉ được sửa đánh giá 1 lần." });
+    }
+
+    review.rating = rating ?? review.rating;
+    review.comment = comment ?? review.comment;
+    review.images = images ?? review.images;
+    review.updatedCount += 1;
+    await review.save();
+
+    return res.status(200).json({ message: "Sửa đánh giá thành công", data: review });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+// Xóa đánh giá (chỉ chủ sở hữu mới được xóa)
+export const deleteReview = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const review = await Review.findById(id);
+    if (!review) {
+      return res.status(404).json({ message: "Đánh giá không tồn tại." });
+    }
+    if (review.userId.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ message: "Bạn không có quyền xóa đánh giá này." });
+    }
+
+    await review.deleteOne();
+
+    return res.status(200).json({ message: "Xóa đánh giá thành công." });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
