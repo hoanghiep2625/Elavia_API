@@ -16,6 +16,8 @@ import wishList from "./routers/wishList.js";
 import attributeRouter from "./routers/attributes.js";
 import siteSettingsRouter from "./routers/siteSettings.js";
 import voucherRouter from "./routers/vocher.js";
+import reviewRouter from "./routers/review.js";
+import "./models/user.js";
 
 dotenv.config();
 
@@ -65,6 +67,7 @@ app.use("/api/wishlist", wishList);
 app.use("/api/attributes", attributeRouter);
 app.use("/api/site-settings", siteSettingsRouter);
 app.use("/api/vouchers", voucherRouter);
+app.use("/api/reviews", reviewRouter);
 
 // const PORT = 2625;
 // app.listen(PORT, async () => {

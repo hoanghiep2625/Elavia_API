@@ -105,4 +105,4 @@ const registerSchema = new Schema(
 
 registerSchema.plugin(mongoosePaginate);
 
-export default mongoose.model("user", registerSchema);
+export default mongoose.model("User", registerSchema);
