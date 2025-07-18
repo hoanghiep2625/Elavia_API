@@ -9,6 +9,7 @@ import {
   patchProductVariantSchema,
 } from "../schemaValidations/variant.schema.js";
 import Product from "../models/product.js";
+import Category from "../models/categories.js";
 const uploadImageToCloudinary = async (file) => {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
@@ -778,5 +779,114 @@ export const searchProducts = async (req, res) => {
   } catch (error) {
     console.error("Search error:", error);
     res.status(500).json({ success: false, message: "Lỗi tìm kiếm sản phẩm" });
+  }
+};
+export const getProductVariantsByCategory = async (req, res) => {
+  try {
+    const {
+      categoryId,
+      sizes = [],
+      color,
+      priceRange,
+      attributes = {},
+      page = 1,
+      limit = 12,
+      sortBy, 
+    } = req.body;
+
+    if (!categoryId) {
+      return res.status(400).json({ message: "categoryId is required" });
+    }
+
+    // Lấy thông tin danh mục
+    const category = await Category.findById(categoryId);
+    if (!category) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+
+    let categoryIds = [categoryId];
+    if (category.level === 2) {
+      const subCategories = await Category.find({ parentId: categoryId });
+      if (subCategories.length > 0) {
+        categoryIds = categoryIds.concat(subCategories.map((c) => c._id));
+      }
+    }
+
+    // Lấy tất cả product thuộc các category này
+    const products = await Product.find({ categoryId: { $in: categoryIds } }).select("_id");
+    const productIds = products.map((p) => p._id);
+
+    // Query lọc
+    const query = { productId: { $in: productIds }, status: true };
+
+    // Lọc theo giá
+    if (
+      Array.isArray(priceRange) &&
+      priceRange.length === 2 &&
+      typeof priceRange[0] === "number" &&
+      typeof priceRange[1] === "number"
+    ) {
+      query.price = { $gte: priceRange[0], $lte: priceRange[1] };
+    } else {
+      query.price = { $gte: 0, $lte: 10000000 };
+    }
+
+    // Lọc theo màu
+    if (color && typeof color === "string" && color.trim() !== "") {
+      query["color.baseColor"] = color;
+    }
+
+    // Lọc theo size + còn hàng
+    if (Array.isArray(sizes) && sizes.length > 0) {
+      query.sizes = {
+        $elemMatch: {
+          size: { $in: sizes },
+          stock: { $gt: 0 },
+        },
+      };
+    }
+
+    // Lọc theo thuộc tính (attributes)
+    if (
+      typeof attributes === "object" &&
+      Object.keys(attributes).some(
+        (k) => Array.isArray(attributes[k]) && attributes[k].length > 0
+      )
+    ) {
+      const attrFilters = Object.entries(attributes)
+        .filter(([_, values]) => Array.isArray(values) && values.length > 0)
+        .map(([attribute, values]) => ({
+          attributes: { $elemMatch: { attribute, value: { $in: values } } },
+        }));
+
+      if (attrFilters.length > 0) {
+        query.$and = [...(query.$and || []), ...attrFilters];
+      }
+    }
+
+    // Xử lý sort động
+    let sort = { createdAt: -1 }; // mặc định mới nhất
+    if (sortBy === "price-asc") sort = { price: 1 };
+    if (sortBy === "price-desc") sort = { price: -1 };
+    if (sortBy === "newest") sort = { createdAt: -1 };
+    if (sortBy === "popular") sort = { sold: -1 };
+    // Query sản phẩm variant
+    const variants = await ProductVariant.paginate(query, {
+      page,
+      limit,
+      populate: "productId",
+      sort,
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: variants.docs,
+      totalPages: variants.totalPages,
+      currentPage: variants.page,
+      total: variants.totalDocs,
+    });
+  } catch (error) {
+    console.error("Lỗi khi lấy sản phẩm theo danh mục:", error);
+    res.status(500).json({ success: false, message: "Lỗi lấy sản phẩm theo danh mục" });
   }
 };
