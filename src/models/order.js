@@ -27,6 +27,7 @@ export const OrderItemSchema = new Schema(
       type: String,
       required: true,
     },
+    reviewed: { type: Boolean, default: false },
   },
   { _id: false }
 );
