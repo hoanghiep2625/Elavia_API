@@ -1,5 +1,6 @@
 import Order from "../models/order.js";
 import Voucher from "../models/vocher.js";
+import Review from "../models/review.js";
 import { getShippingFeeOrder } from "./shippingApi.js";
 export const calculateShippingInfoFromCart = (items) => {
   const validItems = items.filter((item) => {
@@ -333,8 +334,28 @@ export const getOrderById = async (req, res) => {
     if (!order) {
       return res.status(200).json({ message: "Đơn hàng không tồn tại" });
     }
+     // Lấy danh sách review của user trong đơn hàng này
+    const reviews = await Review.find({
+      orderId: order._id,
+      userId: req.user.id,
+    });
 
-    return res.status(200).json(order);
+    // Gắn review tương ứng vào từng item
+    const itemsWithReview = order.items.map((item) => {
+      const review = reviews.find((r) =>
+        r.productVariantId.toString() === item.productVariantId._id.toString()
+      );
+      return {
+        ...item.toObject(),
+        reviewData: review || null,
+      };
+    });
+
+    const result = {
+      ...order.toObject(),
+      items: itemsWithReview,
+    };
+    return res.status(200).json(result);
   } catch (error) {
     return res.status(400).json({
       message: error.message,
