@@ -96,6 +96,8 @@ const registerSchema = new Schema(
     verificationCode: String,
     isVerified: { type: Boolean, default: false },
     verificationExpires: { type: Date, default: "" },
+    resetPasswordToken: { type: String },
+    resetPasswordExpire: { type: Date },
   },
   {
     timestamps: true,
