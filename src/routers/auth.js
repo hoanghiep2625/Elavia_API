@@ -16,6 +16,8 @@ import {
   setDefaultAddress,
   deleteShippingAddress,
   getLoginHistoryByUserId,
+  forgotPassword,
+  resetPassword,
 } from "../controllers/auth.js";
 import { checkAuth } from "../middlewares/checkAuth.js";
 
@@ -41,4 +43,6 @@ router.put(
 );
 router.post("/verify", verifyCode);
 router.post("/resend-code", resendCode);
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password", resetPassword);
 export default router;

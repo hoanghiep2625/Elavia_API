@@ -5,6 +5,8 @@ import mongoose from "mongoose";
 import LoginHistory from "../models/loginHistory.js";
 import useragent from "useragent";
 import sendVerificationEmail from "../utils/sendVerificationEmail.js";
+import nodemailer from "nodemailer";
+import crypto from "crypto";
 import {
   registerSchema,
   loginSchema,
@@ -613,6 +615,65 @@ export const deleteShippingAddress = async (req, res) => {
       message: "Xoá địa chỉ thành công",
       data: user.shipping_addresses,
     });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: "Email không tồn tại." });
+
+    // Tạo token reset
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const resetTokenExpire = Date.now() + 15 * 60 * 1000; // 15 phút
+
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpire = resetTokenExpire;
+    await user.save();
+
+    // Gửi email
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+    await transporter.sendMail({
+      to: email,
+      subject: "Quên mật khẩu Elavia",
+      html: `<p>Nhấn vào <a href="${resetUrl}">đây</a> để đặt lại mật khẩu. Link có hiệu lực 15 phút.</p>`,
+    });
+
+    return res.status(200).json({ message: "Đã gửi email đặt lại mật khẩu." });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+export const resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpire: { $gt: Date.now() },
+    });
+    if (!user)
+      return res
+        .status(400)
+        .json({ message: "Token không hợp lệ hoặc đã hết hạn." });
+
+    // Hash mật khẩu mới trước khi lưu
+    user.password = await bcrypt.hash(newPassword, 10);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    await user.save();
+
+    return res.status(200).json({ message: "Đặt lại mật khẩu thành công." });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
