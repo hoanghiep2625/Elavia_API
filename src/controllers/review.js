@@ -19,7 +19,7 @@ const uploadImageToCloudinary = async (file) => {
 
 // Tạo đánh giá mới có ảnh
 export const createReview = (req, res) => {
-  upload.array("images", 5)(req, res, async (err) => {
+  upload.array("images", 6)(req, res, async (err) => {
     if (err) return res.status(400).json({ message: err.message });
 
     try {
@@ -212,7 +212,7 @@ export const getReviewsByOrder = async (req, res) => {
       return res.status(400).json({ message: "Thiếu orderId" });
     }
 
-    const reviews = await Review.find({ orderId });
+    const reviews = await Review.find({ orderId }).populate("userId", "name");
     return res.status(200).json(reviews);
   } catch (error) {
     return res.status(500).json({ message: error.message });

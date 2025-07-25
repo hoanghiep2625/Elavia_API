@@ -97,7 +97,8 @@ export const createMomoPayment = async (req, res) => {
     const accessKey = process.env.MOMO_ACCESSKEY;
     const secretKey = process.env.MOMO_SECRETKEY;
     const partnerCode = process.env.MOMO_PARTNER_CODE;
-    const redirectUrl = `${process.env.MOMO_REDIRECT_URL}`;
+    // const redirectUrl = `${process.env.MOMO_REDIRECT_URL}`;
+    const redirectUrl = `http://localhost:5173/ordersuccess/${orderId}`;
     const ipnUrl = `${process.env.URL}/api/orders/momo/callback`;
     const requestType = "payWithMethod";
     const requestId = orderId;
@@ -300,8 +301,11 @@ export const createZalopayPayment = async (req, res) => {
     }
 
     // Chuẩn bị dữ liệu ZaloPay
+    // const embed_data = {
+    //   redirecturl: `${process.env.ZALOPAY_REDIRECT_URL}/${orderId}`,
+    // };
     const embed_data = {
-      redirecturl: `${process.env.ZALOPAY_REDIRECT_URL}/${orderId}`,
+      redirecturl: `http://localhost:5173/ordersuccess/${orderId}`,
     };
 
     const transID = orderId;
