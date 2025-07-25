@@ -9,7 +9,11 @@ import {
   getVariantByColor,
   getAllRepresentativeVariants,
   searchProducts,
-  getProductVariantsByCategory
+  getProductVariantsByCategory,
+  getNewArrivalWomen,
+  getNewArrivalMen,
+  getSpringSummerCollectionMen,
+  getSpringSummerCollectionWomen,
 } from "../controllers/productVariant.js";
 import { getRecentlyViewedProducts } from "../controllers/productVariant.js";
 import { checkAuth } from "../middlewares/checkAuth.js";
@@ -28,4 +32,8 @@ router.post("/by-color", getVariantByColor);
 router.post("/search", searchProducts);
 router.get("/:id", getProductVariantById);
 router.post("/by-category", getProductVariantsByCategory);
+router.get("/new-arrival/women", getNewArrivalWomen);
+router.get("/new-arrival/men", getNewArrivalMen);
+router.get("/spring-summer-collection/women", getSpringSummerCollectionWomen);
+router.get("/spring-summer-collection/men", getSpringSummerCollectionMen);
 export default router;
