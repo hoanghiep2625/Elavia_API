@@ -890,3 +890,653 @@ export const getProductVariantsByCategory = async (req, res) => {
     res.status(500).json({ success: false, message: "Lỗi lấy sản phẩm theo danh mục" });
   }
 };
+const getAllChildCategoryIds = (allCategories, rootId) => {
+  const result = [rootId];
+  const stack = [rootId];
+  while (stack.length) {
+    const current = stack.pop();
+    const children = allCategories.filter(c => String(c.parentId) === String(current));
+    for (const child of children) {
+      result.push(child._id);
+      stack.push(child._id);
+    }
+  }
+  return result;
+};
+
+// HÀM NÂNG CAO CHO NEW ARRIVAL WOMEN
+export const getNewArrivalWomen = async (req, res) => {
+  // Hàm lấy mỗi productId 1 variant đại diện (ưu tiên mới nhất)
+  const getRepresentativeVariants = (variants) => {
+    const seen = new Set();
+    const representatives = [];
+    for (const variant of variants) {
+      const pid = String(variant.productId._id || variant.productId);
+      if (!seen.has(pid)) {
+        representatives.push(variant);
+        seen.add(pid);
+      }
+    }
+    return representatives;
+  };
+
+  try {
+    const {
+      page = 1,
+      limit = 12,
+      color,
+      sizes = [],
+      priceRange,
+      attributes = {},
+      sortBy,
+    } = req.query;
+
+    const womenRoot = await Category.findOne({ name: /nữ/i });
+    if (!womenRoot) return res.status(200).json({ data: [] });
+
+    const allCategories = await Category.find();
+    const getAllChildCategoryIds = (allCategories, rootId) => {
+      const result = [rootId];
+      const stack = [rootId];
+      while (stack.length) {
+        const current = stack.pop();
+        const children = allCategories.filter(c => String(c.parentId) === String(current));
+        for (const child of children) {
+          result.push(child._id);
+          stack.push(child._id);
+        }
+      }
+      return result;
+    };
+    const womenCategoryIds = getAllChildCategoryIds(allCategories, womenRoot._id);
+
+    const products = await Product.find({ categoryId: { $in: womenCategoryIds } }).select("_id");
+    const productIds = products.map((p) => p._id);
+
+    const query = { productId: { $in: productIds }, status: true };
+
+    // Lọc theo giá
+    let priceArr = [];
+    if (priceRange) {
+      if (Array.isArray(priceRange)) {
+        priceArr = priceRange.map(Number);
+      } else if (typeof priceRange === "string") {
+        // Nếu là chuỗi dạng "0,10000000"
+        if (priceRange.includes(",")) {
+          priceArr = priceRange.split(",").map(Number);
+        } else {
+          // Nếu là chuỗi JSON
+          try {
+            priceArr = JSON.parse(priceRange);
+          } catch {
+            priceArr = [];
+          }
+        }
+      }
+    }
+
+    if (
+      Array.isArray(priceArr) &&
+      priceArr.length === 2 &&
+      typeof priceArr[0] === "number" &&
+      typeof priceArr[1] === "number"
+    ) {
+      query.price = { $gte: priceArr[0], $lte: priceArr[1] };
+    } else {
+      query.price = { $gte: 0, $lte: 10000000 };
+    }
+
+    // Lọc theo màu
+    if (color && typeof color === "string" && color.trim() !== "") {
+      query["color.baseColor"] = color;
+    }
+
+    // Lọc theo size + còn hàng
+    let sizesArr = [];
+    if (sizes) {
+      sizesArr = typeof sizes === "string" ? JSON.parse(sizes) : sizes;
+    }
+    if (Array.isArray(sizesArr) && sizesArr.length > 0) {
+      query.sizes = {
+        $elemMatch: {
+          size: { $in: sizesArr },
+          stock: { $gt: 0 },
+        },
+      };
+    }
+
+    // Lọc theo thuộc tính (attributes)
+    let attrObj = {};
+    if (attributes) {
+      try {
+        attrObj = typeof attributes === "string" ? JSON.parse(attributes) : attributes;
+      } catch {
+        attrObj = {};
+      }
+      if (
+        typeof attrObj === "object" &&
+        Object.keys(attrObj).some(
+          (k) => Array.isArray(attrObj[k]) && attrObj[k].length > 0
+        )
+      ) {
+        const attrFilters = Object.entries(attrObj)
+          .filter(([_, values]) => Array.isArray(values) && values.length > 0)
+          .map(([attribute, values]) => ({
+            attributes: { $elemMatch: { attribute, value: { $in: values } } },
+          }));
+
+        if (attrFilters.length > 0) {
+          query.$and = [...(query.$and || []), ...attrFilters];
+        }
+      }
+    }
+
+    // Xử lý sort động
+    let sort = { createdAt: -1 };
+    if (req.query.sortBy && req.query.order) {
+      sort = { [req.query.sortBy]: req.query.order === "desc" ? -1 : 1 };
+    }
+
+    // Lấy tất cả variant thỏa mãn filter, sort
+    const allVariants = await ProductVariant.find(query)
+      .populate("productId")
+      .sort(sort);
+
+    // Lấy mỗi productId 1 variant đại diện
+    const representatives = getRepresentativeVariants(allVariants);
+
+    // Phân trang thủ công
+    const total = representatives.length;
+    const totalPages = Math.ceil(total / limit);
+    const docs = representatives.slice((page - 1) * limit, page * limit);
+
+    return res.status(200).json({
+      data: docs,
+      totalPages,
+      currentPage: parseInt(page),
+      total,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+export const getNewArrivalMen = async (req, res) => {
+  // Hàm lấy mỗi productId 1 variant đại diện (ưu tiên mới nhất)
+  const getRepresentativeVariants = (variants) => {
+    const seen = new Set();
+    const representatives = [];
+    for (const variant of variants) {
+      const pid = String(variant.productId._id || variant.productId);
+      if (!seen.has(pid)) {
+        representatives.push(variant);
+        seen.add(pid);
+      }
+    }
+    return representatives;
+  };
+
+  try {
+    const {
+      page = 1,
+      limit = 12,
+      color,
+      sizes = [],
+      priceRange,
+      attributes = {},
+      sortBy,
+    } = req.query;
+
+    const menRoot = await Category.findOne({ name: /nam/i });
+    if (!menRoot) return res.status(200).json({ data: [] });
+
+    const allCategories = await Category.find();
+    const getAllChildCategoryIds = (allCategories, rootId) => {
+      const result = [rootId];
+      const stack = [rootId];
+      while (stack.length) {
+        const current = stack.pop();
+        const children = allCategories.filter(c => String(c.parentId) === String(current));
+        for (const child of children) {
+          result.push(child._id);
+          stack.push(child._id);
+        }
+      }
+      return result;
+    };
+    const menCategoryIds = getAllChildCategoryIds(allCategories, menRoot._id);
+
+    const products = await Product.find({ categoryId: { $in: menCategoryIds } }).select("_id");
+    const productIds = products.map((p) => p._id);
+
+    const query = { productId: { $in: productIds }, status: true };
+
+    // Lọc theo giá
+    let priceArr = [];
+    if (priceRange) {
+      if (Array.isArray(priceRange)) {
+        priceArr = priceRange.map(Number);
+      } else if (typeof priceRange === "string") {
+        // Nếu là chuỗi dạng "0,10000000"
+        if (priceRange.includes(",")) {
+          priceArr = priceRange.split(",").map(Number);
+        } else {
+          // Nếu là chuỗi JSON
+          try {
+            priceArr = JSON.parse(priceRange);
+          } catch {
+            priceArr = [];
+          }
+        }
+      }
+    }
+    if (
+      Array.isArray(priceArr) &&
+      priceArr.length === 2 &&
+      typeof priceArr[0] === "number" &&
+      typeof priceArr[1] === "number"
+    ) {
+      query.price = { $gte: priceArr[0], $lte: priceArr[1] };
+    } else {
+      query.price = { $gte: 0, $lte: 10000000 };
+    }
+
+    // Lọc theo màu
+    if (color && typeof color === "string" && color.trim() !== "") {
+      query["color.baseColor"] = color;
+    }
+
+    // Lọc theo size + còn hàng
+    let sizesArr = [];
+    if (sizes) {
+      sizesArr = typeof sizes === "string" ? JSON.parse(sizes) : sizes;
+    }
+    if (Array.isArray(sizesArr) && sizesArr.length > 0) {
+      query.sizes = {
+        $elemMatch: {
+          size: { $in: sizesArr },
+          stock: { $gt: 0 },
+        },
+      };
+    }
+
+    // Lọc theo thuộc tính (attributes)
+    let attrObj = {};
+    if (attributes) {
+      try {
+        attrObj = typeof attributes === "string" ? JSON.parse(attributes) : attributes;
+      } catch {
+        attrObj = {};
+      }
+      if (
+        typeof attrObj === "object" &&
+        Object.keys(attrObj).some(
+          (k) => Array.isArray(attrObj[k]) && attrObj[k].length > 0
+        )
+      ) {
+        const attrFilters = Object.entries(attrObj)
+          .filter(([_, values]) => Array.isArray(values) && values.length > 0)
+          .map(([attribute, values]) => ({
+            attributes: { $elemMatch: { attribute, value: { $in: values } } },
+          }));
+
+        if (attrFilters.length > 0) {
+          query.$and = [...(query.$and || []), ...attrFilters];
+        }
+      }
+    }
+
+    // Xử lý sort động
+    let sort = { createdAt: -1 };
+    if (req.query.sortBy && req.query.order) {
+      sort = { [req.query.sortBy]: req.query.order === "desc" ? -1 : 1 };
+    }
+
+    // Lấy tất cả variant thỏa mãn filter, sort
+    const allVariants = await ProductVariant.find(query)
+      .populate("productId")
+      .sort(sort);
+
+    // Lấy mỗi productId 1 variant đại diện
+    const representatives = getRepresentativeVariants(allVariants);
+
+    // Phân trang thủ công
+    const total = representatives.length;
+    const totalPages = Math.ceil(total / limit);
+    const docs = representatives.slice((page - 1) * limit, page * limit);
+
+    return res.status(200).json({
+      data: docs,
+      totalPages,
+      currentPage: parseInt(page),
+      total,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+export const getSpringSummerCollectionWomen = async (req, res) => {
+  // Hàm lấy mỗi productId 1 variant đại diện (ưu tiên mới nhất)
+  const getRepresentativeVariants = (variants) => {
+    const seen = new Set();
+    const representatives = [];
+    for (const variant of variants) {
+      const pid = String(variant.productId._id || variant.productId);
+      if (!seen.has(pid)) {
+        representatives.push(variant);
+        seen.add(pid);
+      }
+    }
+    return representatives;
+  };
+
+  // Hàm lấy tất cả _id con của một danh mục gốc
+  const getAllChildCategoryIds = (allCategories, rootId) => {
+    const result = [rootId];
+    const stack = [rootId];
+    while (stack.length) {
+      const current = stack.pop();
+      const children = allCategories.filter(c => String(c.parentId) === String(current));
+      for (const child of children) {
+        result.push(child._id);
+        stack.push(child._id);
+      }
+    }
+    return result;
+  };
+
+  try {
+    const {
+      page = 1,
+      limit = 12,
+      color,
+      sizes = [],
+      priceRange,
+      attributes = {},
+      sortBy,
+    } = req.query;
+
+    // 1. Tìm category cha "Nữ"
+    const womenRoot = await Category.findOne({ name: /nữ/i });
+    if (!womenRoot) return res.status(200).json({ data: [] });
+
+    // 2. Lấy tất cả category con (bao gồm chính nó)
+    const allCategories = await Category.find();
+    const womenCategoryIds = getAllChildCategoryIds(allCategories, womenRoot._id);
+
+    // 3. Lấy tất cả product thuộc các category này và thuộc collection
+    const products = await Product.find({
+      categoryId: { $in: womenCategoryIds },
+      // collection: "fall-winter-2024",   dùng nếu cần lọc theo collection trongdb
+    }).select("_id");
+    const productIds = products.map((p) => p._id);
+
+    // 4. Query lọc nâng cao
+    const query = { productId: { $in: productIds }, status: true };
+
+    // Lọc theo giá
+    let priceArr = [];
+    if (priceRange) {
+      if (Array.isArray(priceRange)) {
+        priceArr = priceRange.map(Number);
+      } else if (typeof priceRange === "string") {
+        // Nếu là chuỗi dạng "0,10000000"
+        if (priceRange.includes(",")) {
+          priceArr = priceRange.split(",").map(Number);
+        } else {
+          // Nếu là chuỗi JSON
+          try {
+            priceArr = JSON.parse(priceRange);
+          } catch {
+            priceArr = [];
+          }
+        }
+      }
+    }
+    if (
+      Array.isArray(priceArr) &&
+      priceArr.length === 2 &&
+      typeof priceArr[0] === "number" &&
+      typeof priceArr[1] === "number"
+    ) {
+      query.price = { $gte: priceArr[0], $lte: priceArr[1] };
+    } else {
+      query.price = { $gte: 0, $lte: 10000000 };
+    }
+
+    // Lọc theo màu
+    if (color && typeof color === "string" && color.trim() !== "") {
+      query["color.baseColor"] = color;
+    }
+
+    // Lọc theo size + còn hàng
+    let sizesArr = [];
+    if (sizes) {
+      sizesArr = typeof sizes === "string" ? JSON.parse(sizes) : sizes;
+    }
+    if (Array.isArray(sizesArr) && sizesArr.length > 0) {
+      query.sizes = {
+        $elemMatch: {
+          size: { $in: sizesArr },
+          stock: { $gt: 0 },
+        },
+      };
+    }
+
+    // Lọc theo thuộc tính (attributes)
+    let attrObj = {};
+    if (attributes) {
+      try {
+        attrObj = typeof attributes === "string" ? JSON.parse(attributes) : attributes;
+      } catch {
+        attrObj = {};
+      }
+      if (
+        typeof attrObj === "object" &&
+        Object.keys(attrObj).some(
+          (k) => Array.isArray(attrObj[k]) && attrObj[k].length > 0
+        )
+      ) {
+        const attrFilters = Object.entries(attrObj)
+          .filter(([_, values]) => Array.isArray(values) && values.length > 0)
+          .map(([attribute, values]) => ({
+            attributes: { $elemMatch: { attribute, value: { $in: values } } },
+          }));
+
+        if (attrFilters.length > 0) {
+          query.$and = [...(query.$and || []), ...attrFilters];
+        }
+      }
+    }
+
+    // Xử lý sort động
+    let sort = { createdAt: -1 };
+    if (req.query.sortBy && req.query.order) {
+      sort = { [req.query.sortBy]: req.query.order === "desc" ? -1 : 1 };
+    }
+
+    // Lấy tất cả variant thỏa mãn filter, sort
+    const allVariants = await ProductVariant.find(query)
+      .populate("productId")
+      .sort(sort);
+
+    // Lấy mỗi productId 1 variant đại diện
+    const representatives = getRepresentativeVariants(allVariants);
+
+    // Phân trang thủ công
+    const total = representatives.length;
+    const totalPages = Math.ceil(total / limit);
+    const docs = representatives.slice((page - 1) * limit, page * limit);
+
+    return res.status(200).json({
+      data: docs,
+      totalPages,
+      currentPage: parseInt(page),
+      total,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+export const getSpringSummerCollectionMen = async (req, res) => {
+  const getRepresentativeVariants = (variants) => {
+    const seen = new Set();
+    const representatives = [];
+    for (const variant of variants) {
+      const pid = String(variant.productId._id || variant.productId);
+      if (!seen.has(pid)) {
+        representatives.push(variant);
+        seen.add(pid);
+      }
+    }
+    return representatives;
+  };
+
+  const getAllChildCategoryIds = (allCategories, rootId) => {
+    const result = [rootId];
+    const stack = [rootId];
+    while (stack.length) {
+      const current = stack.pop();
+      const children = allCategories.filter(c => String(c.parentId) === String(current));
+      for (const child of children) {
+        result.push(child._id);
+        stack.push(child._id);
+      }
+    }
+    return result;
+  };
+
+  try {
+    const {
+      page = 1,
+      limit = 12,
+      color,
+      sizes = [],
+      priceRange,
+      attributes = {},
+      sortBy,
+    } = req.query;
+
+    // 1. Tìm category cha "Nam"
+    const menRoot = await Category.findOne({ name: /nam/i });
+    if (!menRoot) return res.status(200).json({ data: [] });
+
+    // 2. Lấy tất cả category con (bao gồm chính nó)
+    const allCategories = await Category.find();
+    const menCategoryIds = getAllChildCategoryIds(allCategories, menRoot._id);
+
+    // 3. Lấy tất cả product thuộc các category này và thuộc collection
+    const products = await Product.find({
+      categoryId: { $in: menCategoryIds },
+      // collection: "fall-winter-2024", dùng nếu cần lọc theo collection trongdb
+    }).select("_id");
+    const productIds = products.map((p) => p._id);
+
+    // 4. Query lọc nâng cao
+    const query = { productId: { $in: productIds }, status: true };
+
+    // Lọc theo giá
+    let priceArr = [];
+    if (priceRange) {
+      if (Array.isArray(priceRange)) {
+        priceArr = priceRange.map(Number);
+      } else if (typeof priceRange === "string") {
+        // Nếu là chuỗi dạng "0,10000000"
+        if (priceRange.includes(",")) {
+          priceArr = priceRange.split(",").map(Number);
+        } else {
+          // Nếu là chuỗi JSON
+          try {
+            priceArr = JSON.parse(priceRange);
+          } catch {
+            priceArr = [];
+          }
+        }
+      }
+    }
+    if (
+      Array.isArray(priceArr) &&
+      priceArr.length === 2 &&
+      typeof priceArr[0] === "number" &&
+      typeof priceArr[1] === "number"
+    ) {
+      query.price = { $gte: priceArr[0], $lte: priceArr[1] };
+    } else {
+      query.price = { $gte: 0, $lte: 10000000 };
+    }
+
+    // Lọc theo màu
+    if (color && typeof color === "string" && color.trim() !== "") {
+      query["color.baseColor"] = color;
+    }
+
+    // Lọc theo size + còn hàng
+    let sizesArr = [];
+    if (sizes) {
+      sizesArr = typeof sizes === "string" ? JSON.parse(sizes) : sizes;
+    }
+    if (Array.isArray(sizesArr) && sizesArr.length > 0) {
+      query.sizes = {
+        $elemMatch: {
+          size: { $in: sizesArr },
+          stock: { $gt: 0 },
+        },
+      };
+    }
+
+    // Lọc theo thuộc tính (attributes)
+    let attrObj = {};
+    if (attributes) {
+      try {
+        attrObj = typeof attributes === "string" ? JSON.parse(attributes) : attributes;
+      } catch {
+        attrObj = {};
+      }
+      if (
+        typeof attrObj === "object" &&
+        Object.keys(attrObj).some(
+          (k) => Array.isArray(attrObj[k]) && attrObj[k].length > 0
+        )
+      ) {
+        const attrFilters = Object.entries(attrObj)
+          .filter(([_, values]) => Array.isArray(values) && values.length > 0)
+          .map(([attribute, values]) => ({
+            attributes: { $elemMatch: { attribute, value: { $in: values } } },
+          }));
+
+        if (attrFilters.length > 0) {
+          query.$and = [...(query.$and || []), ...attrFilters];
+        }
+      }
+    }
+
+    // Xử lý sort động
+    let sort = { createdAt: -1 };
+    if (req.query.sortBy && req.query.order) {
+      sort = { [req.query.sortBy]: req.query.order === "desc" ? -1 : 1 };
+    }
+
+    // Lấy tất cả variant thỏa mãn filter, sort
+    const allVariants = await ProductVariant.find(query)
+      .populate("productId")
+      .sort(sort);
+
+    // Lấy mỗi productId 1 variant đại diện
+    const representatives = getRepresentativeVariants(allVariants);
+
+    // Phân trang thủ công
+    const total = representatives.length;
+    const totalPages = Math.ceil(total / limit);
+    const docs = representatives.slice((page - 1) * limit, page * limit);
+
+    return res.status(200).json({
+      data: docs,
+      totalPages,
+      currentPage: parseInt(page),
+      total,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
