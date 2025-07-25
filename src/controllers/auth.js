@@ -642,7 +642,8 @@ export const forgotPassword = async (req, res) => {
         pass: process.env.EMAIL_PASS,
       },
     });
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+    // const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+    const resetUrl = `http://localhost:5173/reset-password?token=${resetToken}`;
     await transporter.sendMail({
       to: email,
       subject: "Quên mật khẩu Elavia",
