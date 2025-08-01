@@ -139,7 +139,7 @@ export const createOrder = async (req, res) => {
     if (finalAmount < 0) {
       return res.status(400).json({ message: "Tổng tiền không hợp lệ" });
     }
-    // 1. Kiểm tra tồn kho từng sản phẩm/biến thể
+    // 1. Kiểm tra tồn kho từng sản phẩm/size
     for (const item of items) {
       const variant = await ProductVariant.findById(item.productVariantId);
       if (!variant) {
@@ -147,15 +147,22 @@ export const createOrder = async (req, res) => {
           message: `Không tìm thấy sản phẩm với id ${item.productVariantId}`,
         });
       }
-      if (variant.stock < item.quantity) {
+
+      const sizeEntry = variant.sizes.find((s) => s.size === item.size);
+      if (!sizeEntry) {
         return res.status(400).json({
-          message: `Sản phẩm "${variant.name}" không đủ số lượng. Hiện còn ${variant.stock}`,
+          message: `Không tìm thấy size ${item.size} cho sản phẩm ${variant._id}`,
+        });
+      }
+
+      if (sizeEntry.stock < item.quantity) {
+        return res.status(400).json({
+          message: `Sản phẩm "${item.productName}" - Size ${item.size} không đủ số lượng. Hiện còn ${sizeEntry.stock}`,
         });
       }
     }
-    console.log("Tất cả sản phẩm đủ số lượng trong kho");
 
-    
+
     const orderData = {
       orderId,
       user,
@@ -172,11 +179,11 @@ export const createOrder = async (req, res) => {
       paymentUrl,
       voucher: appliedVoucher
         ? {
-          code: appliedVoucher.code,
-          value: appliedVoucher.value,
-          type: appliedVoucher.type,
-          maxDiscount: appliedVoucher.maxDiscount,
-        }
+            code: appliedVoucher.code,
+            value: appliedVoucher.value,
+            type: appliedVoucher.type,
+            maxDiscount: appliedVoucher.maxDiscount,
+          }
         : null,
       status:
         paymentMethod === "MoMo" || paymentMethod === "zalopay"
@@ -240,7 +247,9 @@ export const cancelOrder = async (req, res) => {
     // Kiểm tra quyền: chỉ chủ đơn hàng mới được hủy với cancelBy === "buyer"
     if (cancelBy === "buyer") {
       if (order.user._id.toString() !== req.user.id.toString()) {
-        return res.status(403).json({ message: "Bạn không có quyền hủy đơn này" });
+        return res
+          .status(403)
+          .json({ message: "Bạn không có quyền hủy đơn này" });
       }
       const allowedStatuses = [
         "Chờ xác nhận",
@@ -258,18 +267,20 @@ export const cancelOrder = async (req, res) => {
       order.status = "Người bán huỷ"; // hoặc "Admin huỷ" nếu bạn muốn phân biệt
     } else {
       return res.status(400).json({
-        message: "Giá trị cancelBy không hợp lệ. Chỉ chấp nhận 'seller', 'admin' hoặc 'buyer'",
+        message:
+          "Giá trị cancelBy không hợp lệ. Chỉ chấp nhận 'seller', 'admin' hoặc 'buyer'",
       });
     }
 
     // Cộng lại số lượng tồn kho cho từng sản phẩm/biến thể trong đơn hàng
     for (const item of order.items) {
+
       await ProductVariant.updateOne(
         { _id: item.productVariantId, "sizes.size": item.size },
         { $inc: { "sizes.$.stock": item.quantity } },
         { session }
       );
-    }
+
 
     // Xử lý hoàn tiền nếu cần (giữ nguyên như code của bạn)
     if (order.paymentMethod === "MoMo") {
@@ -395,7 +406,7 @@ export const getOrderById = async (req, res) => {
     if (!order) {
       return res.status(200).json({ message: "Đơn hàng không tồn tại" });
     }
-     // Lấy danh sách review của user trong đơn hàng này
+    // Lấy danh sách review của user trong đơn hàng này
     const reviews = await Review.find({
       orderId: order._id,
       userId: req.user.id,
@@ -403,8 +414,9 @@ export const getOrderById = async (req, res) => {
 
     // Gắn review tương ứng vào từng item
     const itemsWithReview = order.items.map((item) => {
-      const review = reviews.find((r) =>
-        r.productVariantId.toString() === item.productVariantId._id.toString()
+      const review = reviews.find(
+        (r) =>
+          r.productVariantId.toString() === item.productVariantId._id.toString()
       );
       return {
         ...item.toObject(),

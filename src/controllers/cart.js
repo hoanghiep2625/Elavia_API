@@ -5,13 +5,42 @@ import mongoose from "mongoose";
 export const addToCart = async (req, res) => {
   try {
     const { userId, productVariantId, size, quantity } = req.body;
+
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ message: "UserId không hợp lệ" });
     }
+
+    if (!mongoose.Types.ObjectId.isValid(productVariantId)) {
+      return res.status(400).json({ message: "ProductVariantId không hợp lệ" });
+    }
+
+    if (quantity < 1) {
+      return res.status(400).json({ message: "Số lượng phải lớn hơn 0" });
+    }
+
     const userObjectId = new mongoose.Types.ObjectId(userId);
+    const productVariant = await ProductVariant.findById(productVariantId);
+    if (!productVariant) {
+      return res
+        .status(404)
+        .json({ message: "Biến thể sản phẩm không tồn tại" });
+    }
+
+    const sizeInfo = productVariant.sizes.find((s) => s.size === size);
+    if (!sizeInfo) {
+      return res.status(400).json({ message: "Kích cỡ không hợp lệ" });
+    }
+
     let cart = await Cart.findOne({ userId: userObjectId });
 
     if (!cart) {
+      // Nếu số lượng thêm vượt quá tồn kho thì từ chối
+      if (quantity > sizeInfo.stock) {
+        return res
+          .status(400)
+          .json({ message: `Tồn kho chỉ còn ${sizeInfo.stock}` });
+      }
+      // Tạo giỏ hàng mới
       cart = new Cart({
         userId: userObjectId,
         items: [{ productVariantId, size, quantity }],
@@ -22,9 +51,24 @@ export const addToCart = async (req, res) => {
           item.productVariantId.toString() === productVariantId &&
           item.size === size
       );
+
       if (itemIndex > -1) {
-        cart.items[itemIndex].quantity += quantity;
+        const currentQty = cart.items[itemIndex].quantity;
+        const newQty = currentQty + quantity;
+
+        if (newQty > sizeInfo.stock) {
+          return res.status(400).json({
+            message: `Tổng số lượng trong giỏ hàng vượt quá tồn kho ${sizeInfo.stock}`,
+          });
+        }
+
+        cart.items[itemIndex].quantity = newQty;
       } else {
+        if (quantity > sizeInfo.stock) {
+          return res
+            .status(400)
+            .json({ message: `Tồn kho chỉ còn ${sizeInfo.stock}` });
+        }
         cart.items.push({ productVariantId, size, quantity });
       }
     }
@@ -32,7 +76,8 @@ export const addToCart = async (req, res) => {
     await cart.save();
     return res.status(200).json(cart);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    console.error("Lỗi khi thêm vào giỏ hàng:", error);
+    return res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -157,6 +202,7 @@ export const updateCart = async (req, res) => {
   try {
     const { productVariantId, size, quantity } = req.body;
     const userId = req.user.id;
+
     if (!productVariantId || !size || !quantity || quantity < 1) {
       return res.status(400).json({ message: "Dữ liệu đầu vào không hợp lệ" });
     }
@@ -170,9 +216,10 @@ export const updateCart = async (req, res) => {
 
     const item = cart.items.find(
       (i) =>
-        i.productVariantId._id.toString() === productVariantId &&
+        i.productVariantId._id.toString() === productVariantId.toString() &&
         i.size === size
     );
+
     if (!item) {
       return res
         .status(404)
@@ -190,21 +237,34 @@ export const updateCart = async (req, res) => {
     if (!sizeInfo) {
       return res.status(400).json({ message: "Kích cỡ không hợp lệ" });
     }
-    if (quantity > sizeInfo.stock) {
-      return res
-        .status(400)
-        .json({ message: `Số lượng vượt quá tồn kho (${sizeInfo.stock})` });
+
+    if (quantity > item.quantity) {
+      const maxAvailable = sizeInfo.stock;
+      const quantityInCart = item.quantity;
+
+      const addedQuantity = quantity - quantityInCart;
+      const remainingStock = maxAvailable - quantityInCart;
+
+      if (quantity > maxAvailable) {
+        return res.status(400).json({
+          message: `Số lượng vượt quá tồn kho. Chỉ còn ${
+            remainingStock > 0 ? remainingStock : 0
+          } sản phẩm khả dụng.`,
+        });
+      }
     }
 
+    // ✅ Cập nhật số lượng
     item.quantity = quantity;
     await cart.save();
 
     const updatedCart = await Cart.findOne({ userId }).populate(
       "items.productVariantId"
     );
-    res.json({ success: true, data: updatedCart });
+
+    return res.json({ success: true, data: updatedCart });
   } catch (error) {
     console.error("Lỗi khi cập nhật giỏ hàng:", error);
-    res.status(500).json({ message: "Lỗi server" });
+    return res.status(500).json({ message: "Lỗi server" });
   }
 };
