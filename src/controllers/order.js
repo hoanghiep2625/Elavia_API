@@ -3,6 +3,7 @@ import Voucher from "../models/vocher.js";
 import Review from "../models/review.js";
 import ProductVariant from "../models/productVariant.js";
 import { getShippingFeeOrder } from "./shippingApi.js";
+import mongoose from "mongoose";
 export const calculateShippingInfoFromCart = (items) => {
   const validItems = items.filter((item) => {
     return (
@@ -39,6 +40,9 @@ export const calculateShippingInfoFromCart = (items) => {
 };
 
 export const createOrder = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const {
       orderId,
@@ -53,16 +57,16 @@ export const createOrder = async (req, res) => {
       paymentUrl = "",
     } = req.body;
 
-    const user = {
+    const user = { 
       _id: req.user.id,
       email: req.user.email,
-    };
+     };
 
-    if (!items || !Array.isArray(items) || items.length === 0) {
+     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: "Giỏ hàng trống" });
     }
 
-    if (
+   if (
       !receiver ||
       !receiver.cityName ||
       !receiver.districtName ||
@@ -130,7 +134,7 @@ export const createOrder = async (req, res) => {
       }
     }
 
-    const finalAmount = totalPrice + shippingFee - discountAmount;
+   const finalAmount = totalPrice + shippingFee - discountAmount;
 
     if (finalAmount < 0) {
       return res.status(400).json({ message: "Tổng tiền không hợp lệ" });
@@ -158,18 +162,6 @@ export const createOrder = async (req, res) => {
       }
     }
 
-    // 2. Trừ tồn kho sau khi đảm bảo hợp lệ
-    for (const item of items) {
-      await ProductVariant.updateOne(
-        {
-          _id: item.productVariantId,
-          "sizes.size": item.size,
-        },
-        {
-          $inc: { "sizes.$.stock": -item.quantity },
-        }
-      );
-    }
 
     const orderData = {
       orderId,
@@ -200,20 +192,42 @@ export const createOrder = async (req, res) => {
     };
 
     const order = new Order(orderData);
-    await order.save();
+    await order.save({ session });
 
+    // ✅ Giảm stock theo sizeId (nên gửi kèm sizeId từ FE)
+    for (const item of items) {
+      const updated = await ProductVariant.updateOne(
+          { _id: item.productVariantId, "sizes.size": item.size },
+          { $inc: { "sizes.$.stock": -item.quantity } },
+          { session }
+        );
+
+      if (!updated.modifiedCount) {
+        throw new Error(`Không trừ được stock cho sản phẩm ${item.productVariantId}, sizeId ${item.sizeId}`);
+      }
+    }
+
+    // ✅ Cập nhật voucher nếu có
     if (appliedVoucher) {
       appliedVoucher.usedBy.push(req.user.id);
       appliedVoucher.quantity -= 1;
-      await appliedVoucher.save();
+      await appliedVoucher.save({ session });
     }
 
-    return res.status(201).json({
+    // ✅ Hoàn tất transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(201).json({ 
       message: "Order created successfully",
       order,
-    });
+     });
   } catch (error) {
     console.error("Error in createOrder:", error);
+
+    await session.abortTransaction();
+    session.endSession();
+
     return res.status(500).json({
       message: "Error creating order",
       error: error.message,
@@ -222,6 +236,8 @@ export const createOrder = async (req, res) => {
 };
 
 export const cancelOrder = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const { orderId, cancelBy } = req.body;
     const order = await Order.findOne({ orderId });
@@ -258,10 +274,13 @@ export const cancelOrder = async (req, res) => {
 
     // Cộng lại số lượng tồn kho cho từng sản phẩm/biến thể trong đơn hàng
     for (const item of order.items) {
-      await ProductVariant.findByIdAndUpdate(item.productVariantId, {
-        $inc: { stock: item.quantity },
-      });
-    }
+
+      await ProductVariant.updateOne(
+        { _id: item.productVariantId, "sizes.size": item.size },
+        { $inc: { "sizes.$.stock": item.quantity } },
+        { session }
+      );
+
 
     // Xử lý hoàn tiền nếu cần (giữ nguyên như code của bạn)
     if (order.paymentMethod === "MoMo") {
@@ -274,7 +293,10 @@ export const cancelOrder = async (req, res) => {
         };
       }
     }
-    await order.save();
+    await order.save({ session });
+    
+    await session.commitTransaction();
+    session.endSession();
     return res.status(200).json({
       message: "Huỷ đơn hàng thành công",
       order,
@@ -340,7 +362,7 @@ export const getAllOrders = async (req, res) => {
 
 export const getOrders = async (req, res) => {
   try {
-    const { _page = 1, _limit = 10, status } = req.query;
+    const { _page = 1, _limit = 10, status, _userId } = req.query;
 
     const options = {
       page: parseInt(_page),
@@ -353,6 +375,9 @@ export const getOrders = async (req, res) => {
     };
 
     const query = {};
+     if (_userId) {
+      query["user._id"] = _userId;
+    }
     if (status && status !== "Tất cả") {
       query.status = status; // Lọc theo trạng thái nếu có
     }

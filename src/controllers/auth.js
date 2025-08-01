@@ -647,7 +647,22 @@ export const forgotPassword = async (req, res) => {
     await transporter.sendMail({
       to: email,
       subject: "Quên mật khẩu Elavia",
-      html: `<p>Nhấn vào <a href="${resetUrl}">đây</a> để đặt lại mật khẩu. Link có hiệu lực 15 phút.</p>`,
+      html: `<div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+        <h2>Đặt lại mật khẩu - Elavia</h2>
+        <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.</p>
+        <p>Nhấn vào nút bên dưới để tạo mật khẩu mới:</p>
+        <p style="text-align: center; margin: 30px 0;">
+          <a href="${resetUrl}" 
+             style="background-color: #000000ff; color: white; padding: 10px 20px; 
+                    text-decoration: none;  border-top-left-radius: 5px;border-bottom-right-radius: 5px;">
+            Đặt lại mật khẩu
+          </a>
+        </p>
+        <p>Hoặc sao chép và dán liên kết này vào trình duyệt:</p>
+        <p style="color: red;"><strong>Liên kết sẽ hết hạn sau 15 phút.</strong></p>
+        <hr />
+        <p>Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này.</p>
+      </div>`,
     });
 
     return res.status(200).json({ message: "Đã gửi email đặt lại mật khẩu." });
