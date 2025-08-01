@@ -1,6 +1,7 @@
 import Order from "../models/order.js";
 import Voucher from "../models/vocher.js";
 import Review from "../models/review.js";
+import ProductVariant from "../models/productVariant.js";
 import { getShippingFeeOrder } from "./shippingApi.js";
 export const calculateShippingInfoFromCart = (items) => {
   const validItems = items.filter((item) => {
@@ -134,6 +135,30 @@ export const createOrder = async (req, res) => {
     if (finalAmount < 0) {
       return res.status(400).json({ message: "Tổng tiền không hợp lệ" });
     }
+    // 1. Kiểm tra tồn kho từng sản phẩm/biến thể
+    for (const item of items) {
+      const variant = await ProductVariant.findById(item.productVariantId);
+      if (!variant) {
+        return res.status(400).json({
+          message: `Không tìm thấy sản phẩm với id ${item.productVariantId}`,
+        });
+      }
+      if (variant.stock < item.quantity) {
+        return res.status(400).json({
+          message: `Sản phẩm "${variant.name}" không đủ số lượng. Hiện còn ${variant.stock}`,
+        });
+      }
+    }
+    console.log("Tất cả sản phẩm đủ số lượng trong kho");
+
+    // 2. Trừ tồn kho từng sản phẩm/biến thể
+    for (const item of items) {
+      await ProductVariant.findByIdAndUpdate(
+        item.productVariantId,
+        { $inc: { stock: -item.quantity } }
+      );
+    }
+
     const orderData = {
       orderId,
       user,
@@ -191,7 +216,11 @@ export const cancelOrder = async (req, res) => {
     if (!order) {
       return res.status(404).json({ message: "Không tìm thấy đơn hàng" });
     }
+    // Kiểm tra quyền: chỉ chủ đơn hàng mới được hủy với cancelBy === "buyer"
     if (cancelBy === "buyer") {
+      if (order.user._id.toString() !== req.user.id.toString()) {
+        return res.status(403).json({ message: "Bạn không có quyền hủy đơn này" });
+      }
       const allowedStatuses = [
         "Chờ xác nhận",
         "Đã thanh toán",
@@ -204,21 +233,25 @@ export const cancelOrder = async (req, res) => {
         });
       }
       order.status = "Người mua huỷ";
-    } else if (cancelBy === "seller") {
-      // Người bán có thể huỷ bất cứ lúc nào
-      order.status = "Người bán huỷ";
+    } else if (cancelBy === "seller" || cancelBy === "admin") {
+      order.status = "Người bán huỷ"; // hoặc "Admin huỷ" nếu bạn muốn phân biệt
     } else {
       return res.status(400).json({
-        message:
-          "Giá trị cancelBy không hợp lệ. Chỉ chấp nhận 'seller' hoặc 'buyer'",
+        message: "Giá trị cancelBy không hợp lệ. Chỉ chấp nhận 'seller', 'admin' hoặc 'buyer'",
       });
     }
 
-    // Xử lý theo phương thức thanh toán
+    // Cộng lại số lượng tồn kho cho từng sản phẩm/biến thể trong đơn hàng
+    for (const item of order.items) {
+      await ProductVariant.findByIdAndUpdate(
+        item.productVariantId,
+        { $inc: { stock: item.quantity } }
+      );
+    }
+
+    // Xử lý hoàn tiền nếu cần (giữ nguyên như code của bạn)
     if (order.paymentMethod === "MoMo") {
       if (order.status === "Đã thanh toán") {
-        // Ghi log xử lý hoàn tiền MoMo
-        console.log("Xử lý refund qua MoMo...");
         order.paymentDetails = {
           ...order.paymentDetails,
           refundRequested: true,
