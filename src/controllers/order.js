@@ -4,6 +4,8 @@ import Review from "../models/review.js";
 import ProductVariant from "../models/productVariant.js";
 import { getShippingFeeOrder } from "./shippingApi.js";
 import mongoose from "mongoose";
+import { sendOrderEmail } from "../utils/sendOrderEmail.js";
+import { sendTelegramMessage } from "../utils/sendTelegram.js";
 export const calculateShippingInfoFromCart = (items) => {
   const validItems = items.filter((item) => {
     return (
@@ -217,6 +219,25 @@ export const createOrder = async (req, res) => {
     // ✅ Hoàn tất transaction
     await session.commitTransaction();
     session.endSession();
+
+    // Gửi email xác nhận đơn hàng
+    const trackingUrl = `http://localhost:5173/order-details/${order._id}`;
+    try {
+      await sendOrderEmail({
+        to: user.email,
+        order,
+        trackingUrl,
+      });
+    } catch (err) {
+      console.error("Gửi email thất bại:", err);
+    }
+
+    // Gửi thông báo Telegram cho admin
+    try {
+      await sendTelegramMessage(`Đã có đơn hàng mới! Vui lòng kiểm tra hệ thống.`);
+    } catch (err) {
+      console.error("Gửi Telegram thất bại:", err);
+    }
 
     return res.status(201).json({ 
       message: "Order created successfully",
