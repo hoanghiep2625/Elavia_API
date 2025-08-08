@@ -17,6 +17,7 @@
     "vite-plugin-node": "^4.0.0"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@ngrok/ngrok": "^1.4.1",
     "axios": "^1.8.4",
     "bcryptjs": "^2.4.3",
@@ -24,10 +25,10 @@
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "crypto-js": "^4.2.0",
-    "dotenv": "^16.4.7",
+    "dotenv": "^16.6.1",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.12.1",
+    "mongoose": "^8.17.1",
     "mongoose-paginate-v2": "^1.9.0",
     "multer": "^1.4.5-lts.1",
     "node-cron": "^3.0.3",

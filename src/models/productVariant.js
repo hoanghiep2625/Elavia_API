@@ -9,6 +9,7 @@ const productVariantSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    embedding: { type: [Number], default: [] },
     sku: { type: String, required: true, index: true }, // SKU chung, dùng để liên kết hiển thị với sản phẩm cha
     price: { type: Number, required: true, index: true },
     color: {
