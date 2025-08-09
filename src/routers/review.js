@@ -4,8 +4,6 @@ import { createReview, getReviewsByProductVariant, updateReview, deleteReview, g
 
 const router = Router();
 
-router.use(checkAuth);
-
 router.post("/",checkAuth, createReview);
 router.get("/", getReviewsByOrder);
 router.get("/:productVariantId", getReviewsByProductVariant);
