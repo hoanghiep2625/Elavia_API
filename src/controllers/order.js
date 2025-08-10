@@ -188,7 +188,7 @@ export const createOrder = async (req, res) => {
           return "Chờ thanh toán";
         case "COD":
         default:
-          return "Chờ xác nhận";
+          return "Thanh toán khi nhận hàng";
       }
     };
     const getInitialShippingStatus = () => "Chờ xác nhận";
@@ -560,8 +560,12 @@ const allowedPaymentStatusTransitions = {
     "Người mua huỷ",
     "Người bán huỷ",
   ],
-  "Đã thanh toán": ["Chờ xác nhận", "Người mua huỷ", "Người bán huỷ"],
-  "Chờ xác nhận": ["Người mua huỷ", "Người bán huỷ"],
+  "Đã thanh toán": ["Người mua huỷ", "Người bán huỷ"],
+  "Thanh toán khi nhận hàng": [
+    "Đã thanh toán", // Khi giao hàng thành công
+    "Người mua huỷ",
+    "Người bán huỷ",
+  ],
   "Huỷ do quá thời gian thanh toán": [],
   "Người mua huỷ": [],
   "Người bán huỷ": [],
