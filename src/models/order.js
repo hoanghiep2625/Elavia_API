@@ -99,26 +99,17 @@ export const OrderSchema = new Schema(
     paymentUrl: {
       type: String,
     },
-    // Lưu thông tin thanh toán cho đơn hàng MoMo
     paymentDetails: PaymentDetailsSchema,
-    // Trạng thái đơn hàng kết hợp cho cả COD và MoMo
-    // Lưu ý: Một số trạng thái chỉ áp dụng cho MoMo hoặc COD. Logic nghiệp vụ ở tầng controller/service sẽ xử lý sao cho phù hợp.
-    status: {
+    // Trạng thái thanh toán
+    paymentStatus: {
       type: String,
       enum: [
-        // COD:
-        "Chờ xác nhận", // Mặc định với COD
-        "Đã xác nhận", // Khi người bán xác nhận đơn hàng
-        "Người bán huỷ", // Huỷ bởi người bán
-        "Người mua huỷ", // Huỷ bởi người mua
-        "Đang giao hàng", // Đang trong quá trình giao hàng
-        "Giao hàng thành công", // Giao hàng thành công
-        "Giao hàng thất bại", // Giao hàng thất bại
-        // MoMo:
         "Chờ thanh toán", // Mặc định với MoMo
         "Đã thanh toán", // Sau khi MoMo xác nhận thanh toán
         "Huỷ do quá thời gian thanh toán", // Huỷ tự động nếu hết hạn thanh toán
-        // Lưu ý: "Người mua huỷ", "Người bán huỷ", "Đang giao hàng", "Giao hàng thành công" và "Giao hàng thất bại" cũng được áp dụng cho MoMo
+        "Chờ xác nhận", // Mặc định với COD
+        "Người mua huỷ", // Huỷ bởi người mua
+        "Người bán huỷ", // Huỷ bởi người bán
       ],
       required: true,
       default: function () {
@@ -126,6 +117,21 @@ export const OrderSchema = new Schema(
           ? "Chờ thanh toán"
           : "Chờ xác nhận";
       },
+    },
+    // Trạng thái giao hàng
+    shippingStatus: {
+      type: String,
+      enum: [
+        "Chờ xác nhận", // Mặc định với COD
+        "Đã xác nhận", // Khi người bán xác nhận đơn hàng
+        "Đang giao hàng", // Đang trong quá trình giao hàng
+        "Giao hàng thành công", // Giao hàng thành công
+        "Giao hàng thất bại", // Giao hàng thất bại
+        "Người mua huỷ", // Huỷ bởi người mua
+        "Người bán huỷ", // Huỷ bởi người bán
+      ],
+      required: true,
+      default: "Chờ xác nhận",
     },
   },
   { timestamps: true, versionKey: false }

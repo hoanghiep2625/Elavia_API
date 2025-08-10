@@ -1,4 +1,5 @@
 import Order from "../models/order.js";
+import ProductVariantSnapshot from "../models/productVariantSnapshot.js";
 import Voucher from "../models/vocher.js";
 import Review from "../models/review.js";
 import ProductVariant from "../models/productVariant.js";
@@ -175,12 +176,12 @@ export const createOrder = async (req, res) => {
       // Thêm version vào item
       validatedItems.push({
         ...item,
-        version: variant.__v || 0, // Sử dụng __v của mongoose hoặc 0 nếu không có
+        version: variant.version || 1, // Lưu version hiện tại của variant
       });
     }
 
-    // Xác định status dựa trên payment method
-    const getInitialStatus = (paymentMethod) => {
+    // Xác định trạng thái ban đầu dựa trên payment method
+    const getInitialPaymentStatus = (paymentMethod) => {
       switch (paymentMethod) {
         case "MoMo":
         case "zalopay":
@@ -190,6 +191,7 @@ export const createOrder = async (req, res) => {
           return "Chờ xác nhận";
       }
     };
+    const getInitialShippingStatus = () => "Chờ xác nhận";
 
     // Tạo payment details cho MoMo nếu cần
     let paymentDetails = null;
@@ -221,7 +223,8 @@ export const createOrder = async (req, res) => {
             maxDiscount: appliedVoucher.maxDiscount,
           }
         : null,
-      status: getInitialStatus(paymentMethod),
+      paymentStatus: getInitialPaymentStatus(paymentMethod),
+      shippingStatus: getInitialShippingStatus(),
     };
 
     const order = new Order(orderData);
@@ -272,17 +275,17 @@ export const createOrder = async (req, res) => {
     }
 
     // 6. Gửi thông báo Telegram cho admin
-    try {
-      await sendTelegramMessage(
-        `🛒 Đơn hàng mới!\n` +
-          `📋 Mã đơn: ${orderId}\n` +
-          `💰 Tổng tiền: ${finalAmount.toLocaleString("vi-VN")}đ\n` +
-          `💳 Thanh toán: ${paymentMethod}\n` +
-          `📧 Khách hàng: ${user.email}`
-      );
-    } catch (err) {
-      console.error("Gửi Telegram thất bại:", err);
-    }
+    // try {
+    //   await sendTelegramMessage(
+    //     `🛒 Đơn hàng mới!\n` +
+    //       `📋 Mã đơn: ${orderId}\n` +
+    //       `💰 Tổng tiền: ${finalAmount.toLocaleString("vi-VN")}đ\n` +
+    //       `💳 Thanh toán: ${paymentMethod}\n` +
+    //       `📧 Khách hàng: ${user.email}`
+    //   );
+    // } catch (err) {
+    //   console.error("Gửi Telegram thất bại:", err);
+    // }
 
     return res.status(201).json({
       message: "Tạo đơn hàng thành công",
@@ -326,20 +329,25 @@ export const cancelOrder = async (req, res) => {
           .status(403)
           .json({ message: "Bạn không có quyền hủy đơn này" });
       }
-      const allowedStatuses = [
+      const allowedPaymentStatuses = [
         "Chờ xác nhận",
         "Đã thanh toán",
         "Chờ thanh toán",
-        "Đã xác nhận",
       ];
-      if (!allowedStatuses.includes(order.status)) {
+      const allowedShippingStatuses = ["Chờ xác nhận", "Đã xác nhận"];
+      if (
+        !allowedPaymentStatuses.includes(order.paymentStatus) &&
+        !allowedShippingStatuses.includes(order.shippingStatus)
+      ) {
         return res.status(400).json({
           message: "Không thể huỷ đơn hàng ở trạng thái này",
         });
       }
-      order.status = "Người mua huỷ";
+      order.paymentStatus = "Người mua huỷ";
+      order.shippingStatus = "Người mua huỷ";
     } else if (cancelBy === "seller" || cancelBy === "admin") {
-      order.status = "Người bán huỷ"; // hoặc "Admin huỷ" nếu bạn muốn phân biệt
+      order.paymentStatus = "Người bán huỷ";
+      order.shippingStatus = "Người bán huỷ";
     } else {
       return res.status(400).json({
         message:
@@ -358,7 +366,7 @@ export const cancelOrder = async (req, res) => {
 
     // Xử lý hoàn tiền nếu cần (giữ nguyên như code của bạn)
     if (order.paymentMethod === "MoMo") {
-      if (order.status === "Đã thanh toán") {
+      if (order.paymentStatus === "Đã thanh toán") {
         order.paymentDetails = {
           ...order.paymentDetails,
           refundRequested: true,
@@ -405,7 +413,10 @@ export const getAllOrders = async (req, res) => {
     if (_phone) query["receiver.phone"] = { $regex: _phone, $options: "i" };
     if (_email) query["user.email"] = { $regex: _email, $options: "i" };
     if (_address) query["user.address"] = { $regex: _address, $options: "i" };
-    if (_status && _status !== "Tất cả") query.status = _status;
+    if (_status && _status !== "Tất cả") {
+      // Tìm theo paymentStatus hoặc shippingStatus
+      query.$or = [{ paymentStatus: _status }, { shippingStatus: _status }];
+    }
 
     const options = {
       page: parseInt(_page),
@@ -453,7 +464,7 @@ export const getOrders = async (req, res) => {
       query["user._id"] = _userId;
     }
     if (status && status !== "Tất cả") {
-      query.status = status; // Lọc theo trạng thái nếu có
+      query.$or = [{ paymentStatus: status }, { shippingStatus: status }];
     }
     const result = await Order.paginate(query, options);
 
@@ -473,10 +484,7 @@ export const getOrders = async (req, res) => {
 };
 export const getOrderById = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id).populate(
-      "items.productVariantId"
-    ); // <- dòng này để populate chi tiết biến thể
-
+    const order = await Order.findById(req.params.id);
     if (!order) {
       return res.status(200).json({ message: "Đơn hàng không tồn tại" });
     }
@@ -486,21 +494,29 @@ export const getOrderById = async (req, res) => {
       userId: req.user.id,
     });
 
-    // Gắn review tương ứng vào từng item
-    const itemsWithReview = order.items.map((item) => {
-      const review = reviews.find(
-        (r) =>
-          r.productVariantId.toString() === item.productVariantId._id.toString()
-      );
-      return {
-        ...item.toObject(),
-        reviewData: review || null,
-      };
-    });
+    // Trả về thông tin sản phẩm từ snapshot cho từng item (chỉ dùng snapshot, không populate Product)
+    const itemsWithSnapshot = await Promise.all(
+      order.items.map(async (item) => {
+        // Lấy snapshot theo variantId và version
+        const snapshot = await ProductVariantSnapshot.findOne({
+          variantId: item.productVariantId,
+          version: item.version,
+        });
+        const review = reviews.find(
+          (r) =>
+            r.productVariantId.toString() === item.productVariantId.toString()
+        );
+        return {
+          ...item.toObject(),
+          productInfo: snapshot ? snapshot.toObject() : null,
+          reviewData: review || null,
+        };
+      })
+    );
 
     const result = {
       ...order.toObject(),
-      items: itemsWithReview,
+      items: itemsWithSnapshot,
     };
     return res.status(200).json(result);
   } catch (error) {
@@ -509,19 +525,31 @@ export const getOrderById = async (req, res) => {
     });
   }
 };
-const allowedStatusTransitions = {
-  "Chờ xác nhận": ["Đã xác nhận", "Người mua huỷ", "Người bán huỷ"],
-  "Đã xác nhận": ["Đang giao hàng", "Người bán huỷ"],
-  "Đang giao hàng": ["Giao hàng thành công", "Giao hàng thất bại"],
-  "Giao hàng thất bại": ["Người bán huỷ"],
-
-  // Các trạng thái MoMo
-  "Chờ thanh toán": ["Đã thanh toán", "Huỷ do quá thời gian thanh toán"],
-  "Đã thanh toán": ["Chờ xác nhận"], // Sau khi thanh toán mới được chuyển sang xử lý
+// Chuyển đổi trạng thái cho paymentStatus và shippingStatus
+const allowedPaymentStatusTransitions = {
+  "Chờ thanh toán": [
+    "Đã thanh toán",
+    "Huỷ do quá thời gian thanh toán",
+    "Người mua huỷ",
+    "Người bán huỷ",
+  ],
+  "Đã thanh toán": ["Chờ xác nhận", "Người mua huỷ", "Người bán huỷ"],
+  "Chờ xác nhận": ["Người mua huỷ", "Người bán huỷ"],
   "Huỷ do quá thời gian thanh toán": [],
-
-  // Các trạng thái cuối
-  "Giao hàng thành công": [], // không được chuyển tiếp
+  "Người mua huỷ": [],
+  "Người bán huỷ": [],
+};
+const allowedShippingStatusTransitions = {
+  "Chờ xác nhận": ["Đã xác nhận", "Người mua huỷ", "Người bán huỷ"],
+  "Đã xác nhận": ["Đang giao hàng", "Người bán huỷ", "Người mua huỷ"],
+  "Đang giao hàng": [
+    "Giao hàng thành công",
+    "Giao hàng thất bại",
+    "Người bán huỷ",
+    "Người mua huỷ",
+  ],
+  "Giao hàng thành công": [],
+  "Giao hàng thất bại": ["Người bán huỷ", "Người mua huỷ"],
   "Người mua huỷ": [],
   "Người bán huỷ": [],
 };
@@ -544,19 +572,23 @@ export const updateOrderStatus = async (req, res) => {
     }
 
     // 2. Kiểm tra trạng thái được phép chuyển đổi
+    const updateData = {};
     if (status) {
-      const currentStatus = order.status;
-      const allowedNextStatuses = allowedStatusTransitions[currentStatus] || [];
-      if (!allowedNextStatuses.includes(status)) {
+      // Nếu trạng thái là trạng thái thanh toán
+      if (
+        allowedPaymentStatusTransitions[order.paymentStatus]?.includes(status)
+      ) {
+        updateData.paymentStatus = status;
+      } else if (
+        allowedShippingStatusTransitions[order.shippingStatus]?.includes(status)
+      ) {
+        updateData.shippingStatus = status;
+      } else {
         return res.status(400).json({
-          message: `Không thể chuyển trạng thái từ "${currentStatus}" sang "${status}".`,
+          message: `Không thể chuyển trạng thái từ "${order.paymentStatus}" hoặc "${order.shippingStatus}" sang "${status}".`,
         });
       }
     }
-
-    // 3. Chuẩn bị dữ liệu cập nhật
-    const updateData = {};
-    if (status) updateData.status = status;
     // Chỉ cập nhật receiver
     if (receiver && typeof receiver === "object") {
       if (receiver.name) updateData["receiver.name"] = receiver.name;

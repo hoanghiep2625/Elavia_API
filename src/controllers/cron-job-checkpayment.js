@@ -57,7 +57,7 @@ const processMoMoOrder = async (order) => {
             { orderId: order.orderId },
             {
               $set: {
-                status: "Đã thanh toán",
+                paymentStatus: "Đã thanh toán",
                 paymentDetails: {
                   momoTransactionId: response.data.transId,
                   responseData: response.data,
@@ -71,14 +71,14 @@ const processMoMoOrder = async (order) => {
       case 1005:
         await Order.updateOne(
           { orderId: order.orderId },
-          { status: "Huỷ do quá thời gian thanh toán" }
+          { $set: { paymentStatus: "Huỷ do quá thời gian thanh toán" } }
         );
         console.log(`❌ MoMo order ${order.orderId} expired`);
         break;
       case 1002:
         await Order.updateOne(
           { orderId: order.orderId },
-          { status: "Giao dịch bị từ chối do nhà phát hành" }
+          { $set: { paymentStatus: "Giao dịch bị từ chối do nhà phát hành" } }
         );
         console.log(`❌ MoMo order ${order.orderId} rejected by issuer`);
         break;
@@ -108,7 +108,7 @@ const processZaloPayOrder = async (order) => {
             { orderId: order.orderId },
             {
               $set: {
-                status: "Đã thanh toán",
+                paymentStatus: "Đã thanh toán",
                 paymentDetails: {
                   zalopayTransactionId: response.data.zp_trans_id,
                   responseData: response.data,
@@ -125,7 +125,7 @@ const processZaloPayOrder = async (order) => {
       default:
         await Order.updateOne(
           { orderId: order.orderId },
-          { status: "Huỷ do quá thời gian thanh toán" }
+          { $set: { paymentStatus: "Huỷ do quá thời gian thanh toán" } }
         );
         console.log(`❌ ZaloPay order ${order.orderId} expired`);
     }
@@ -146,8 +146,8 @@ const checkPaymentStatus = async () => {
   try {
     const pendingOrders = await Order.find({
       $or: [
-        { paymentMethod: "MoMo", status: "Chờ thanh toán" },
-        { paymentMethod: "zalopay", status: "Chờ thanh toán" },
+        { paymentMethod: "MoMo", paymentStatus: "Chờ thanh toán" },
+        { paymentMethod: "zalopay", paymentStatus: "Chờ thanh toán" },
       ],
     }).lean(); // Use lean for better performance
 

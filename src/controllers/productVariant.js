@@ -84,12 +84,17 @@ export const createProductVariant = async (req, res) => {
       // 1️⃣ Tạo ProductVariant
       const variant = await ProductVariant.create(variantData);
 
-      // 2️⃣ Tạo snapshot version 1
+      // 2️⃣ Lấy thông tin sản phẩm gốc
+      const product = await Product.findById(variant.productId);
+
+      // 3️⃣ Tạo snapshot version 1
       const { embedding, ...snapshotData } = variant.toObject();
       await ProductVariantSnapshot.create({
         ...snapshotData,
         variantId: variant._id,
         version: 1,
+        productName: product ? product.name : "",
+        product: product ? product.toObject() : {},
       });
 
       return res.status(201).json(variant);
@@ -380,12 +385,17 @@ export const updateProductVariant = async (req, res) => {
 
       const nextVersion = lastSnapshot ? lastSnapshot.version + 1 : 1;
 
-      // 2️⃣ Tạo snapshot mới
+      // 2️⃣ Lấy thông tin sản phẩm gốc
+      const product = await Product.findById(updatedVariant.productId);
+
+      // 3️⃣ Tạo snapshot mới
       const { embedding, _id, ...snapshotData } = updatedVariant.toObject();
       await ProductVariantSnapshot.create({
         ...snapshotData,
         variantId: updatedVariant._id,
         version: nextVersion,
+        productName: product ? product.name : "",
+        product: product ? product.toObject() : {},
       });
 
       return res.status(200).json({
@@ -982,9 +992,11 @@ export const getNewArrivalWomen = async (req, res) => {
       sortBy,
     } = req.query;
 
+    // 1. Lấy danh mục "nữ"
     const womenRoot = await Category.findOne({ name: /nữ/i });
     if (!womenRoot) return res.status(200).json({ data: [] });
 
+    // 2. Lấy tất cả category con của "nữ"
     const allCategories = await Category.find();
     const getAllChildCategoryIds = (allCategories, rootId) => {
       const result = [rootId];
@@ -1006,24 +1018,24 @@ export const getNewArrivalWomen = async (req, res) => {
       womenRoot._id
     );
 
+    // 3. Lấy productIds thuộc các category này
     const products = await Product.find({
       categoryId: { $in: womenCategoryIds },
     }).select("_id");
     const productIds = products.map((p) => p._id);
 
+    // 4. Tạo query cho ProductVariant
     const query = { productId: { $in: productIds }, status: true };
 
-    // Lọc theo giá
+    // 5. Lọc theo giá (áp dụng vào sizes.price)
     let priceArr = [];
     if (priceRange) {
       if (Array.isArray(priceRange)) {
         priceArr = priceRange.map(Number);
       } else if (typeof priceRange === "string") {
-        // Nếu là chuỗi dạng "0,10000000"
         if (priceRange.includes(",")) {
           priceArr = priceRange.split(",").map(Number);
         } else {
-          // Nếu là chuỗi JSON
           try {
             priceArr = JSON.parse(priceRange);
           } catch {
@@ -1032,38 +1044,46 @@ export const getNewArrivalWomen = async (req, res) => {
         }
       }
     }
-
     if (
-      Array.isArray(priceArr) &&
-      priceArr.length === 2 &&
-      typeof priceArr[0] === "number" &&
-      typeof priceArr[1] === "number"
+      !(
+        Array.isArray(priceArr) &&
+        priceArr.length === 2 &&
+        typeof priceArr[0] === "number" &&
+        typeof priceArr[1] === "number"
+      )
     ) {
-      query.price = { $gte: priceArr[0], $lte: priceArr[1] };
-    } else {
-      query.price = { $gte: 0, $lte: 10000000 };
+      priceArr = [0, 10000000]; // mặc định
     }
 
-    // Lọc theo màu
+    // 6. Lọc theo màu
     if (color && typeof color === "string" && color.trim() !== "") {
       query["color.baseColor"] = color;
     }
 
-    // Lọc theo size + còn hàng
+    // 7. Lọc theo size + còn hàng + giá
     let sizesArr = [];
     if (sizes) {
       sizesArr = typeof sizes === "string" ? JSON.parse(sizes) : sizes;
     }
+
     if (Array.isArray(sizesArr) && sizesArr.length > 0) {
       query.sizes = {
         $elemMatch: {
           size: { $in: sizesArr },
           stock: { $gt: 0 },
+          price: { $gte: priceArr[0], $lte: priceArr[1] },
+        },
+      };
+    } else {
+      // Nếu không lọc size thì chỉ lọc giá
+      query.sizes = {
+        $elemMatch: {
+          price: { $gte: priceArr[0], $lte: priceArr[1] },
         },
       };
     }
 
-    // Lọc theo thuộc tính (attributes)
+    // 8. Lọc theo thuộc tính
     let attrObj = {};
     if (attributes) {
       try {
@@ -1090,21 +1110,21 @@ export const getNewArrivalWomen = async (req, res) => {
       }
     }
 
-    // Xử lý sort động
+    // 9. Xử lý sort
     let sort = { createdAt: -1 };
-    if (req.query.sortBy && req.query.order) {
-      sort = { [req.query.sortBy]: req.query.order === "desc" ? -1 : 1 };
+    if (sortBy && req.query.order) {
+      sort = { [sortBy]: req.query.order === "desc" ? -1 : 1 };
     }
 
-    // Lấy tất cả variant thỏa mãn filter, sort
+    // 10. Lấy variants theo filter
     const allVariants = await ProductVariant.find(query)
       .populate("productId")
       .sort(sort);
 
-    // Lấy mỗi productId 1 variant đại diện
+    // 11. Mỗi productId 1 variant đại diện
     const representatives = getRepresentativeVariants(allVariants);
 
-    // Phân trang thủ công
+    // 12. Phân trang
     const total = representatives.length;
     const totalPages = Math.ceil(total / limit);
     const docs = representatives.slice((page - 1) * limit, page * limit);

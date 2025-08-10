@@ -18,6 +18,14 @@ const productVariantSnapshotSchema = new mongoose.Schema(
       ref: "Product",
       required: true,
     },
+    productName: {
+      type: String,
+      required: true,
+    },
+    product: {
+      type: Object,
+      required: false,
+    },
     sku: { type: String, required: true },
     color: {
       baseColor: { type: String, required: true },

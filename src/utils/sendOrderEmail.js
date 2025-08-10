@@ -57,7 +57,9 @@ export async function sendOrderEmail({ to, order, trackingUrl }) {
               <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${
                 item.quantity
               }</td>
-              <td style="padding: 10px; border: 1px solid #ddd; text-align: right; color: #d32f2f;">${item.price.toLocaleString()}đ</td>
+              <td style="padding: 10px; border: 1px solid #ddd; text-align: right; color: #d32f2f;">${Number(
+                item.price || 0
+              ).toLocaleString()}đ</td>
             </tr>
           `
             )
