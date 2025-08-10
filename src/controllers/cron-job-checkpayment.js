@@ -2,6 +2,7 @@ import cron from "node-cron";
 import axios from "axios";
 import mongoose from "mongoose";
 import Order from "../models/order.js";
+import { autoConfirmDeliveredOrders } from "./order.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -155,24 +156,34 @@ const checkPaymentStatus = async () => {
 
     if (pendingOrders.length === 0) {
       console.log("✅ No orders to check");
-      return;
+    } else {
+      // Process orders concurrently with controlled concurrency
+      const concurrencyLimit = 10;
+      const chunks = [];
+      for (let i = 0; i < pendingOrders.length; i += concurrencyLimit) {
+        chunks.push(pendingOrders.slice(i, i + concurrencyLimit));
+      }
+
+      for (const chunk of chunks) {
+        await Promise.all(
+          chunk.map((order) =>
+            order.paymentMethod === "MoMo"
+              ? processMoMoOrder(order)
+              : processZaloPayOrder(order)
+          )
+        );
+      }
     }
 
-    // Process orders concurrently with controlled concurrency
-    const concurrencyLimit = 10;
-    const chunks = [];
-    for (let i = 0; i < pendingOrders.length; i += concurrencyLimit) {
-      chunks.push(pendingOrders.slice(i, i + concurrencyLimit));
-    }
-
-    for (const chunk of chunks) {
-      await Promise.all(
-        chunk.map((order) =>
-          order.paymentMethod === "MoMo"
-            ? processMoMoOrder(order)
-            : processZaloPayOrder(order)
-        )
+    // Kiểm tra và tự động xác nhận đơn hàng đã giao thành công sau 48h
+    console.log("🔄 Checking delivered orders for auto-confirmation...");
+    const confirmResult = await autoConfirmDeliveredOrders();
+    if (confirmResult.success) {
+      console.log(
+        `✅ Auto-confirmed ${confirmResult.confirmedOrdersCount} delivered orders`
       );
+    } else {
+      console.error(`❌ Error auto-confirming orders: ${confirmResult.error}`);
     }
   } catch (error) {
     console.error("⚠️ Error querying orders:", error.message);

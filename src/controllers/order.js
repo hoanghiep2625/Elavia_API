@@ -312,6 +312,31 @@ export const createOrder = async (req, res) => {
     }
   }
 };
+export const confirmReceivedOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const order = await Order.findOne({
+      orderId,
+      "user._id": req.user.id,
+      shippingStatus: "Giao hàng thành công",
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy đơn hoặc trạng thái không hợp lệ",
+      });
+    }
+
+    order.shippingStatus = "Đã nhận hàng"; // hoặc Hoàn tất
+    await order.save();
+
+    res.json({ success: true, message: "Xác nhận nhận hàng thành công" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi server" });
+  }
+};
 // Lấy danh sách đơn hàng có trạng thái thanh toán là 'Chờ thanh toán'
 export const getPendingPaymentOrders = async (req, res) => {
   try {
@@ -576,11 +601,17 @@ const allowedShippingStatusTransitions = {
   "Đang giao hàng": [
     "Giao hàng thành công",
     "Giao hàng thất bại",
+    "Khiếu nại", // Người dùng có thể khiếu nại khi đang giao hàng
     "Người bán huỷ",
     "Người mua huỷ",
   ],
-  "Giao hàng thành công": [],
-  "Giao hàng thất bại": ["Người bán huỷ", "Người mua huỷ"],
+  "Giao hàng thành công": ["Đã nhận hàng", "Khiếu nại"], // Có thể khiếu nại sau khi giao thành công
+  "Đã nhận hàng": [],
+  "Giao hàng thất bại": ["Người bán huỷ", "Người mua huỷ", "Khiếu nại"],
+  "Khiếu nại": ["Đang xử lý khiếu nại"],
+  "Đang xử lý khiếu nại": ["Khiếu nại được giải quyết", "Khiếu nại bị từ chối"],
+  "Khiếu nại được giải quyết": [],
+  "Khiếu nại bị từ chối": [],
   "Người mua huỷ": [],
   "Người bán huỷ": [],
 };
@@ -588,9 +619,9 @@ const allowedShippingStatusTransitions = {
 export const updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, receiver } = req.body;
+    const { status, paymentStatus, shippingStatus, receiver } = req.body;
 
-    if (!status && !receiver) {
+    if (!status && !paymentStatus && !shippingStatus && !receiver) {
       return res
         .status(400)
         .json({ message: "Vui lòng cung cấp thông tin cần cập nhật" });
@@ -604,6 +635,38 @@ export const updateOrderStatus = async (req, res) => {
 
     // 2. Kiểm tra trạng thái được phép chuyển đổi
     const updateData = {};
+
+    // Xử lý paymentStatus riêng biệt
+    if (paymentStatus) {
+      if (
+        allowedPaymentStatusTransitions[order.paymentStatus]?.includes(
+          paymentStatus
+        )
+      ) {
+        updateData.paymentStatus = paymentStatus;
+      } else {
+        return res.status(400).json({
+          message: `Không thể chuyển trạng thái thanh toán từ "${order.paymentStatus}" sang "${paymentStatus}".`,
+        });
+      }
+    }
+
+    // Xử lý shippingStatus riêng biệt
+    if (shippingStatus) {
+      if (
+        allowedShippingStatusTransitions[order.shippingStatus]?.includes(
+          shippingStatus
+        )
+      ) {
+        updateData.shippingStatus = shippingStatus;
+      } else {
+        return res.status(400).json({
+          message: `Không thể chuyển trạng thái giao hàng từ "${order.shippingStatus}" sang "${shippingStatus}".`,
+        });
+      }
+    }
+
+    // Xử lý status cũ (để tương thích ngược)
     if (status) {
       // Nếu trạng thái là trạng thái thanh toán
       if (
@@ -620,6 +683,7 @@ export const updateOrderStatus = async (req, res) => {
         });
       }
     }
+
     // Chỉ cập nhật receiver
     if (receiver && typeof receiver === "object") {
       if (receiver.name) updateData["receiver.name"] = receiver.name;
@@ -649,5 +713,341 @@ export const updateOrderStatus = async (req, res) => {
     return res
       .status(500)
       .json({ message: "Có lỗi xảy ra, vui lòng thử lại sau" });
+  }
+};
+
+// Tự động chuyển trạng thái "Giao hàng thành công" thành "Đã nhận hàng" sau 48h
+export const autoConfirmDeliveredOrders = async () => {
+  try {
+    const fortyEightHoursAgo = new Date();
+    fortyEightHoursAgo.setHours(fortyEightHoursAgo.getHours() - 48);
+
+    const ordersToConfirm = await Order.find({
+      shippingStatus: "Giao hàng thành công",
+      updatedAt: { $lte: fortyEightHoursAgo },
+    });
+
+    console.log(
+      `🔍 Found ${ordersToConfirm.length} orders to auto-confirm delivery`
+    );
+
+    for (const order of ordersToConfirm) {
+      await Order.updateOne(
+        { _id: order._id },
+        {
+          $set: {
+            shippingStatus: "Đã nhận hàng",
+            // Nếu COD thì cũng cập nhật payment status
+            ...(order.paymentMethod === "COD" &&
+            order.paymentStatus === "Thanh toán khi nhận hàng"
+              ? { paymentStatus: "Đã thanh toán" }
+              : {}),
+          },
+        }
+      );
+
+      console.log(`✅ Auto-confirmed delivery for order ${order.orderId}`);
+    }
+
+    return {
+      success: true,
+      confirmedOrdersCount: ordersToConfirm.length,
+    };
+  } catch (error) {
+    console.error("❌ Error in autoConfirmDeliveredOrders:", error.message);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
+
+// Khiếu nại đơn hàng khi chưa nhận được hàng
+export const createComplaint = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { reason, description } = req.body;
+
+    // Validate input
+    if (!reason || !description) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng cung cấp lý do và mô tả khiếu nại",
+      });
+    }
+
+    // Tìm đơn hàng và kiểm tra quyền
+    const order = await Order.findOne({
+      orderId,
+      "user._id": req.user.id,
+    });
+
+    console.log("🔍 Debug createComplaint:");
+    console.log("- orderId:", orderId);
+    console.log("- userId:", req.user.id);
+    console.log("- order found:", !!order);
+    console.log("- order shippingStatus:", order?.shippingStatus);
+    console.log("- order complaint exists:", !!order?.complaint);
+    console.log("- order complaint details:", order?.complaint);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy đơn hàng hoặc bạn không có quyền truy cập",
+      });
+    }
+
+    // Kiểm tra trạng thái có thể khiếu nại
+    const allowedComplaintStatuses = [
+      "Đang giao hàng",
+      "Giao hàng thành công",
+      "Giao hàng thất bại",
+    ];
+
+    if (!allowedComplaintStatuses.includes(order.shippingStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: `Không thể khiếu nại đơn hàng ở trạng thái "${order.shippingStatus}"`,
+      });
+    }
+
+    // Kiểm tra xem đã có khiếu nại chưa
+    if (order.complaint && order.complaint.reason) {
+      return res.status(400).json({
+        success: false,
+        message: "Đơn hàng này đã được khiếu nại trước đó",
+        currentComplaint: {
+          reason: order.complaint.reason,
+          status: order.complaint.status,
+          createdAt: order.complaint.createdAt,
+        },
+      });
+    }
+
+    // Tạo khiếu nại
+    const complaintData = {
+      reason,
+      description,
+      createdAt: new Date(),
+      status: "Chờ xử lý",
+      images: req.body.images || [], // Cho phép đính kèm hình ảnh
+    };
+
+    // Cập nhật đơn hàng
+    const updatedOrder = await Order.findByIdAndUpdate(
+      order._id,
+      {
+        $set: {
+          shippingStatus: "Khiếu nại",
+          complaint: complaintData,
+        },
+      },
+      { new: true }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Khiếu nại đã được gửi thành công",
+      data: {
+        orderId: updatedOrder.orderId,
+        complaint: updatedOrder.complaint,
+        shippingStatus: updatedOrder.shippingStatus,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error in createComplaint:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi khi gửi khiếu nại",
+      error: error.message,
+    });
+  }
+};
+
+// Xử lý khiếu nại (cho admin)
+export const processComplaint = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { action, adminNote, resolution } = req.body;
+
+    // Validate input
+    if (!action || !["accept", "reject", "processing"].includes(action)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Hành động không hợp lệ. Chỉ chấp nhận: accept, reject, processing",
+      });
+    }
+
+    // Tìm đơn hàng có khiếu nại
+    const order = await Order.findOne({
+      orderId,
+      shippingStatus: { $in: ["Khiếu nại", "Đang xử lý khiếu nại"] },
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy đơn hàng có khiếu nại",
+      });
+    }
+
+    if (!order.complaint) {
+      return res.status(400).json({
+        success: false,
+        message: "Đơn hàng này không có khiếu nại",
+      });
+    }
+
+    // Xử lý theo action
+    let newShippingStatus;
+    let complaintStatus;
+
+    switch (action) {
+      case "processing":
+        newShippingStatus = "Đang xử lý khiếu nại";
+        complaintStatus = "Đang xử lý";
+        break;
+      case "accept":
+        newShippingStatus = "Khiếu nại được giải quyết";
+        complaintStatus = "Được chấp nhận";
+        break;
+      case "reject":
+        newShippingStatus = "Khiếu nại bị từ chối";
+        complaintStatus = "Bị từ chối";
+        break;
+    }
+
+    // Cập nhật khiếu nại
+    const updatedComplaint = {
+      ...order.complaint,
+      status: complaintStatus,
+      adminNote: adminNote || "",
+      resolution: resolution || "",
+      processedAt: new Date(),
+      processedBy: req.user.id, // Admin ID
+    };
+
+    const updatedOrder = await Order.findByIdAndUpdate(
+      order._id,
+      {
+        $set: {
+          shippingStatus: newShippingStatus,
+          complaint: updatedComplaint,
+        },
+      },
+      { new: true }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: `Khiếu nại đã được ${
+        action === "accept"
+          ? "chấp nhận"
+          : action === "reject"
+          ? "từ chối"
+          : "xử lý"
+      }`,
+      data: {
+        orderId: updatedOrder.orderId,
+        complaint: updatedOrder.complaint,
+        shippingStatus: updatedOrder.shippingStatus,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error in processComplaint:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi khi xử lý khiếu nại",
+      error: error.message,
+    });
+  }
+};
+
+// Lấy danh sách khiếu nại (cho admin)
+export const getComplaints = async (req, res) => {
+  try {
+    const { _page = 1, _limit = 10, status } = req.query;
+
+    const query = {
+      complaint: { $exists: true },
+    };
+
+    if (status && status !== "Tất cả") {
+      query["complaint.status"] = status;
+    }
+
+    const options = {
+      page: parseInt(_page),
+      limit: parseInt(_limit),
+      sort: { "complaint.createdAt": -1 },
+      populate: {
+        path: "items.productVariantId",
+        model: "ProductVariant",
+      },
+    };
+
+    const result = await Order.paginate(query, options);
+
+    return res.status(200).json({
+      success: true,
+      data: result.docs,
+      totalPages: result.totalPages,
+      currentPage: result.page,
+      total: result.totalDocs,
+    });
+  } catch (error) {
+    console.error("❌ Error in getComplaints:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi khi lấy danh sách khiếu nại",
+      error: error.message,
+    });
+  }
+};
+
+// Hàm debug: Reset khiếu nại cho testing (chỉ dùng trong development)
+export const resetComplaint = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const order = await Order.findOne({
+      orderId,
+      "user._id": req.user.id,
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy đơn hàng",
+      });
+    }
+
+    // Xóa khiếu nại và reset trạng thái
+    const updatedOrder = await Order.findByIdAndUpdate(
+      order._id,
+      {
+        $unset: { complaint: 1 },
+        $set: { shippingStatus: "Giao hàng thành công" },
+      },
+      { new: true }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Đã reset khiếu nại thành công",
+      data: {
+        orderId: updatedOrder.orderId,
+        shippingStatus: updatedOrder.shippingStatus,
+        complaint: updatedOrder.complaint,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error in resetComplaint:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi khi reset khiếu nại",
+      error: error.message,
+    });
   }
 };

@@ -104,34 +104,55 @@ export const OrderSchema = new Schema(
     paymentStatus: {
       type: String,
       enum: [
-        "Chờ thanh toán", // Mặc định với MoMo
-        "Đã thanh toán", // Sau khi MoMo xác nhận thanh toán
+        "Chờ thanh toán", // Mặc định với MoMo/ZaloPay
+        "Đã thanh toán", // Sau khi xác nhận thanh toán
+        "Thanh toán khi nhận hàng", // Mặc định với COD
         "Huỷ do quá thời gian thanh toán", // Huỷ tự động nếu hết hạn thanh toán
-        "Chờ xác nhận", // Mặc định với COD
         "Người mua huỷ", // Huỷ bởi người mua
         "Người bán huỷ", // Huỷ bởi người bán
       ],
       required: true,
       default: function () {
-        return this.paymentMethod === "MoMo"
+        return this.paymentMethod === "MoMo" || this.paymentMethod === "zalopay"
           ? "Chờ thanh toán"
-          : "Chờ xác nhận";
+          : "Thanh toán khi nhận hàng";
       },
     },
     // Trạng thái giao hàng
     shippingStatus: {
       type: String,
       enum: [
-        "Chờ xác nhận", // Mặc định với COD
+        "Chờ xác nhận", // Mặc định
         "Đã xác nhận", // Khi người bán xác nhận đơn hàng
         "Đang giao hàng", // Đang trong quá trình giao hàng
         "Giao hàng thành công", // Giao hàng thành công
         "Giao hàng thất bại", // Giao hàng thất bại
+        "Đã nhận hàng", // Khách hàng xác nhận đã nhận hàng
+        "Khiếu nại", // Khách hàng khiếu nại
+        "Đang xử lý khiếu nại", // Admin đang xử lý khiếu nại
+        "Khiếu nại được giải quyết", // Khiếu nại được chấp nhận
+        "Khiếu nại bị từ chối", // Khiếu nại bị từ chối
         "Người mua huỷ", // Huỷ bởi người mua
         "Người bán huỷ", // Huỷ bởi người bán
       ],
       required: true,
       default: "Chờ xác nhận",
+    },
+    // Thông tin khiếu nại
+    complaint: {
+      reason: { type: String }, // Lý do khiếu nại
+      description: { type: String }, // Mô tả chi tiết
+      images: [{ type: String }], // Danh sách URL hình ảnh đính kèm
+      createdAt: { type: Date }, // Thời gian tạo khiếu nại
+      status: {
+        type: String,
+        enum: ["Chờ xử lý", "Đang xử lý", "Được chấp nhận", "Bị từ chối"],
+        default: "Chờ xử lý",
+      },
+      adminNote: { type: String }, // Ghi chú của admin
+      resolution: { type: String }, // Cách giải quyết
+      processedAt: { type: Date }, // Thời gian xử lý
+      processedBy: { type: Schema.Types.ObjectId, ref: "User" }, // Admin xử lý
     },
   },
   { timestamps: true, versionKey: false }
