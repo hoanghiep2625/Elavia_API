@@ -13,11 +13,13 @@ import {
   cancelOrder,
   getOrderById,
   getOrders,
+  getPendingPaymentOrders,
 } from "../controllers/order.js";
 const router = Router();
 router.post("/", checkAuth, createOrder);
 router.post("/cancel", checkAuth, cancelOrder);
 router.get("/", checkAuth, getOrders);
+router.get("/get-pending-payment-orders", checkAuth, getPendingPaymentOrders);
 router.get("/:id", checkAuth, getOrderById);
 
 router.post("/momo/create", createMomoPayment);

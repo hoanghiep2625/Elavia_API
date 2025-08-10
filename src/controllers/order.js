@@ -312,7 +312,34 @@ export const createOrder = async (req, res) => {
     }
   }
 };
-
+// Lấy danh sách đơn hàng có trạng thái thanh toán là 'Chờ thanh toán'
+export const getPendingPaymentOrders = async (req, res) => {
+  try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        message: "Bạn chưa đăng nhập",
+        success: false,
+      });
+    }
+    const orders = await Order.find({
+      paymentStatus: "Chờ thanh toán",
+      "user._id": req.user.id,
+    })
+      .populate({ path: "items.productVariantId", model: "ProductVariant" })
+      .lean();
+    return res.status(200).json({
+      data: orders,
+      total: orders.length,
+      success: true,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Lỗi khi lấy danh sách đơn hàng chờ thanh toán",
+      error: error.message,
+      success: false,
+    });
+  }
+};
 export const cancelOrder = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
