@@ -4,6 +4,7 @@ import upload from "../middlewares/multer.js";
 import cloudinary from "../config/cloudinary.js";
 import { parseFormData } from "../utils/parseFormData.js";
 import RecentlyViewed from "../models/recentlyViewed.js";
+import ProductVariantSnapshot from "../models/productVariantSnapshot.js";
 import {
   productVariantSchema,
   patchProductVariantSchema,
@@ -33,14 +34,25 @@ export const createProductVariant = async (req, res) => {
     if (err) return res.status(400).json({ message: err.message });
 
     try {
-      const formData = parseFormData(req.body);
+      let formData = parseFormData(req.body);
 
+      // Parse sizes từ JSON string
+      if (typeof formData.sizes === "string") {
+        try {
+          formData.sizes = JSON.parse(formData.sizes);
+        } catch {
+          return res.status(400).json({ message: "Sizes không hợp lệ" });
+        }
+      }
+
+      // Validate
       const result = productVariantSchema.safeParse(formData);
       if (!result.success) {
         const errors = result.error.errors.map((err) => err.message);
         return res.status(400).json({ errors });
       }
 
+      // Upload ảnh
       const mainImage = req.files["mainImage"]
         ? await uploadImageToCloudinary(req.files["mainImage"][0])
         : null;
@@ -59,6 +71,7 @@ export const createProductVariant = async (req, res) => {
         });
       }
 
+      // Dữ liệu variant
       const variantData = {
         ...result.data,
         images: {
@@ -68,7 +81,17 @@ export const createProductVariant = async (req, res) => {
         },
       };
 
+      // 1️⃣ Tạo ProductVariant
       const variant = await ProductVariant.create(variantData);
+
+      // 2️⃣ Tạo snapshot version 1
+      const { embedding, ...snapshotData } = variant.toObject();
+      await ProductVariantSnapshot.create({
+        ...snapshotData,
+        variantId: variant._id,
+        version: 1,
+      });
+
       return res.status(201).json(variant);
     } catch (error) {
       return res.status(400).json({ message: error.message });
@@ -209,12 +232,23 @@ export const updateProductVariant = async (req, res) => {
     if (err) return res.status(400).json({ message: err.message });
 
     try {
-      const formData = parseFormData(req.body);
+      let formData = parseFormData(req.body);
+
+      // Parse deletedImages
       formData.deletedImages = req.body["deletedImages[]"]
         ? Array.isArray(req.body["deletedImages[]"])
           ? req.body["deletedImages[]"]
           : [req.body["deletedImages[]"]]
         : [];
+
+      // Parse sizes nếu frontend gửi dạng JSON string
+      if (typeof formData.sizes === "string") {
+        try {
+          formData.sizes = JSON.parse(formData.sizes);
+        } catch {
+          return res.status(400).json({ message: "Sizes không hợp lệ" });
+        }
+      }
 
       const result = patchProductVariantSchema.safeParse(formData);
       if (!result.success) {
@@ -234,6 +268,7 @@ export const updateProductVariant = async (req, res) => {
           .json({ message: "Biến thể sản phẩm không tồn tại" });
       }
 
+      // Xóa ảnh trên Cloudinary
       if (Array.isArray(deletedImages) && deletedImages.length > 0) {
         await Promise.all(
           deletedImages.map(async (publicId) => {
@@ -268,6 +303,7 @@ export const updateProductVariant = async (req, res) => {
         variantData.images = existingVariant.images;
       }
 
+      // Upload ảnh mới
       variantData.images = existingVariant.images || {};
       if (req.files) {
         if (req.files["images[main]"]) {
@@ -314,6 +350,7 @@ export const updateProductVariant = async (req, res) => {
         }
       }
 
+      // Chỉ update field nào có giá trị
       const updateFields = {};
       for (const key in variantData) {
         if (variantData[key] !== undefined) {
@@ -323,7 +360,10 @@ export const updateProductVariant = async (req, res) => {
 
       const updatedVariant = await ProductVariant.findByIdAndUpdate(
         req.params.id,
-        updateFields,
+        {
+          $set: updateFields,
+          $inc: { version: 1 },
+        },
         { new: true }
       );
 
@@ -332,6 +372,21 @@ export const updateProductVariant = async (req, res) => {
           .status(404)
           .json({ message: "Biến thể sản phẩm không tồn tại" });
       }
+
+      // 1️⃣ Lấy version mới nhất của snapshot cũ
+      const lastSnapshot = await ProductVariantSnapshot.findOne({
+        variantId: updatedVariant._id,
+      }).sort({ version: -1 });
+
+      const nextVersion = lastSnapshot ? lastSnapshot.version + 1 : 1;
+
+      // 2️⃣ Tạo snapshot mới
+      const { embedding, _id, ...snapshotData } = updatedVariant.toObject();
+      await ProductVariantSnapshot.create({
+        ...snapshotData,
+        variantId: updatedVariant._id,
+        version: nextVersion,
+      });
 
       return res.status(200).json({
         message: "Cập nhật biến thể sản phẩm thành công",
@@ -347,23 +402,13 @@ export const updateProductVariant = async (req, res) => {
 // Xóa biến thể sản phẩm
 export const deleteProductVariant = async (req, res) => {
   try {
-    const variant = await ProductVariant.findByIdAndDelete(req.params.id);
+    const variant = req.params.id;
     if (!variant) {
       return res
         .status(404)
         .json({ message: "Biến thể sản phẩm không tồn tại" });
     }
-
-    const images = variant.images;
-    if (images?.main?.public_id)
-      await cloudinary.uploader.destroy(images.main.public_id);
-    if (images?.hover?.public_id)
-      await cloudinary.uploader.destroy(images.hover.public_id);
-    if (images?.product?.length) {
-      for (const img of images.product) {
-        if (img.public_id) await cloudinary.uploader.destroy(img.public_id);
-      }
-    }
+    await ProductVariant.findByIdAndDelete(req.params.id);
 
     return res.status(200).json({
       message: "Xóa biến thể sản phẩm thành công",
@@ -791,7 +836,7 @@ export const getProductVariantsByCategory = async (req, res) => {
       attributes = {},
       page = 1,
       limit = 12,
-      sortBy, 
+      sortBy,
     } = req.body;
 
     if (!categoryId) {
@@ -813,7 +858,9 @@ export const getProductVariantsByCategory = async (req, res) => {
     }
 
     // Lấy tất cả product thuộc các category này
-    const products = await Product.find({ categoryId: { $in: categoryIds } }).select("_id");
+    const products = await Product.find({
+      categoryId: { $in: categoryIds },
+    }).select("_id");
     const productIds = products.map((p) => p._id);
 
     // Query lọc
@@ -887,7 +934,9 @@ export const getProductVariantsByCategory = async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi khi lấy sản phẩm theo danh mục:", error);
-    res.status(500).json({ success: false, message: "Lỗi lấy sản phẩm theo danh mục" });
+    res
+      .status(500)
+      .json({ success: false, message: "Lỗi lấy sản phẩm theo danh mục" });
   }
 };
 const getAllChildCategoryIds = (allCategories, rootId) => {
@@ -895,7 +944,9 @@ const getAllChildCategoryIds = (allCategories, rootId) => {
   const stack = [rootId];
   while (stack.length) {
     const current = stack.pop();
-    const children = allCategories.filter(c => String(c.parentId) === String(current));
+    const children = allCategories.filter(
+      (c) => String(c.parentId) === String(current)
+    );
     for (const child of children) {
       result.push(child._id);
       stack.push(child._id);
@@ -940,7 +991,9 @@ export const getNewArrivalWomen = async (req, res) => {
       const stack = [rootId];
       while (stack.length) {
         const current = stack.pop();
-        const children = allCategories.filter(c => String(c.parentId) === String(current));
+        const children = allCategories.filter(
+          (c) => String(c.parentId) === String(current)
+        );
         for (const child of children) {
           result.push(child._id);
           stack.push(child._id);
@@ -948,9 +1001,14 @@ export const getNewArrivalWomen = async (req, res) => {
       }
       return result;
     };
-    const womenCategoryIds = getAllChildCategoryIds(allCategories, womenRoot._id);
+    const womenCategoryIds = getAllChildCategoryIds(
+      allCategories,
+      womenRoot._id
+    );
 
-    const products = await Product.find({ categoryId: { $in: womenCategoryIds } }).select("_id");
+    const products = await Product.find({
+      categoryId: { $in: womenCategoryIds },
+    }).select("_id");
     const productIds = products.map((p) => p._id);
 
     const query = { productId: { $in: productIds }, status: true };
@@ -1009,7 +1067,8 @@ export const getNewArrivalWomen = async (req, res) => {
     let attrObj = {};
     if (attributes) {
       try {
-        attrObj = typeof attributes === "string" ? JSON.parse(attributes) : attributes;
+        attrObj =
+          typeof attributes === "string" ? JSON.parse(attributes) : attributes;
       } catch {
         attrObj = {};
       }
@@ -1096,7 +1155,9 @@ export const getNewArrivalMen = async (req, res) => {
       const stack = [rootId];
       while (stack.length) {
         const current = stack.pop();
-        const children = allCategories.filter(c => String(c.parentId) === String(current));
+        const children = allCategories.filter(
+          (c) => String(c.parentId) === String(current)
+        );
         for (const child of children) {
           result.push(child._id);
           stack.push(child._id);
@@ -1106,7 +1167,9 @@ export const getNewArrivalMen = async (req, res) => {
     };
     const menCategoryIds = getAllChildCategoryIds(allCategories, menRoot._id);
 
-    const products = await Product.find({ categoryId: { $in: menCategoryIds } }).select("_id");
+    const products = await Product.find({
+      categoryId: { $in: menCategoryIds },
+    }).select("_id");
     const productIds = products.map((p) => p._id);
 
     const query = { productId: { $in: productIds }, status: true };
@@ -1164,7 +1227,8 @@ export const getNewArrivalMen = async (req, res) => {
     let attrObj = {};
     if (attributes) {
       try {
-        attrObj = typeof attributes === "string" ? JSON.parse(attributes) : attributes;
+        attrObj =
+          typeof attributes === "string" ? JSON.parse(attributes) : attributes;
       } catch {
         attrObj = {};
       }
@@ -1237,7 +1301,9 @@ export const getSpringSummerCollectionWomen = async (req, res) => {
     const stack = [rootId];
     while (stack.length) {
       const current = stack.pop();
-      const children = allCategories.filter(c => String(c.parentId) === String(current));
+      const children = allCategories.filter(
+        (c) => String(c.parentId) === String(current)
+      );
       for (const child of children) {
         result.push(child._id);
         stack.push(child._id);
@@ -1263,7 +1329,10 @@ export const getSpringSummerCollectionWomen = async (req, res) => {
 
     // 2. Lấy tất cả category con (bao gồm chính nó)
     const allCategories = await Category.find();
-    const womenCategoryIds = getAllChildCategoryIds(allCategories, womenRoot._id);
+    const womenCategoryIds = getAllChildCategoryIds(
+      allCategories,
+      womenRoot._id
+    );
 
     // 3. Lấy tất cả product thuộc các category này và thuộc collection
     const products = await Product.find({
@@ -1328,7 +1397,8 @@ export const getSpringSummerCollectionWomen = async (req, res) => {
     let attrObj = {};
     if (attributes) {
       try {
-        attrObj = typeof attributes === "string" ? JSON.parse(attributes) : attributes;
+        attrObj =
+          typeof attributes === "string" ? JSON.parse(attributes) : attributes;
       } catch {
         attrObj = {};
       }
@@ -1398,7 +1468,9 @@ export const getSpringSummerCollectionMen = async (req, res) => {
     const stack = [rootId];
     while (stack.length) {
       const current = stack.pop();
-      const children = allCategories.filter(c => String(c.parentId) === String(current));
+      const children = allCategories.filter(
+        (c) => String(c.parentId) === String(current)
+      );
       for (const child of children) {
         result.push(child._id);
         stack.push(child._id);
@@ -1489,7 +1561,8 @@ export const getSpringSummerCollectionMen = async (req, res) => {
     let attrObj = {};
     if (attributes) {
       try {
-        attrObj = typeof attributes === "string" ? JSON.parse(attributes) : attributes;
+        attrObj =
+          typeof attributes === "string" ? JSON.parse(attributes) : attributes;
       } catch {
         attrObj = {};
       }

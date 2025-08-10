@@ -1,18 +1,26 @@
 import mongoose from "mongoose";
-import mongoosePaginate from "mongoose-paginate-v2";
 
-const productVariantSchema = new mongoose.Schema(
+const productVariantSnapshotSchema = new mongoose.Schema(
   {
+    variantId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ProductVariant",
+      required: true,
+      index: true,
+    },
+    version: {
+      type: Number,
+      required: true,
+      index: true,
+    },
     productId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
       required: true,
-      index: true,
     },
-    embedding: { type: [Number], default: [] },
-    sku: { type: String, required: true, index: true }, // SKU chung
+    sku: { type: String, required: true },
     color: {
-      baseColor: { type: String, required: true, index: true },
+      baseColor: { type: String, required: true },
       actualColor: { type: String, required: true },
       colorName: { type: String, required: true },
     },
@@ -45,25 +53,19 @@ const productVariantSchema = new mongoose.Schema(
           enum: ["S", "M", "L", "XL", "XXL"],
           required: true,
         },
-        stock: { type: Number, required: true, min: 0, index: true },
-        price: { type: Number, required: true, index: true }, // Giá riêng cho size này
+        stock: { type: Number, required: true, min: 0 },
+        price: { type: Number, required: true },
       },
     ],
     status: {
       type: Boolean,
       default: true,
-      index: true,
-    },
-    version: {
-      type: Number,
-      required: true,
-      default: 1,
-      index: true,
     },
   },
   { timestamps: true, versionKey: false }
 );
 
-productVariantSchema.plugin(mongoosePaginate);
-
-export default mongoose.model("ProductVariant", productVariantSchema);
+export default mongoose.model(
+  "ProductVariantSnapshot",
+  productVariantSnapshotSchema
+);

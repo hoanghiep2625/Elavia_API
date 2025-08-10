@@ -57,18 +57,20 @@ export const createOrder = async (req, res) => {
       extraData = "",
       orderGroupId = "",
       paymentUrl = "",
+      momoTransactionId = "", // Thêm để lưu transaction ID từ MoMo
     } = req.body;
 
-    const user = { 
+    const user = {
       _id: req.user.id,
       email: req.user.email,
-     };
+    };
 
-     if (!items || !Array.isArray(items) || items.length === 0) {
+    // Validate cơ bản
+    if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: "Giỏ hàng trống" });
     }
 
-   if (
+    if (
       !receiver ||
       !receiver.cityName ||
       !receiver.districtName ||
@@ -76,6 +78,8 @@ export const createOrder = async (req, res) => {
     ) {
       return res.status(400).json({ message: "Thiếu thông tin người nhận" });
     }
+
+    // Tính toán thông tin vận chuyển
     const {
       insurance_value,
       total_weight,
@@ -93,6 +97,7 @@ export const createOrder = async (req, res) => {
       total_width
     );
 
+    // Xử lý voucher
     let appliedVoucher = null;
     let discountAmount = 0;
 
@@ -136,12 +141,14 @@ export const createOrder = async (req, res) => {
       }
     }
 
-   const finalAmount = totalPrice + shippingFee - discountAmount;
+    const finalAmount = totalPrice + shippingFee - discountAmount;
 
     if (finalAmount < 0) {
       return res.status(400).json({ message: "Tổng tiền không hợp lệ" });
     }
-    // 1. Kiểm tra tồn kho từng sản phẩm/size
+
+    // 1. Kiểm tra tồn kho và lấy version cho từng sản phẩm
+    const validatedItems = [];
     for (const item of items) {
       const variant = await ProductVariant.findById(item.productVariantId);
       if (!variant) {
@@ -159,26 +166,53 @@ export const createOrder = async (req, res) => {
 
       if (sizeEntry.stock < item.quantity) {
         return res.status(400).json({
-          message: `Sản phẩm "${item.productName}" - Size ${item.size} không đủ số lượng. Hiện còn ${sizeEntry.stock}`,
+          message: `Sản phẩm "${item.productName || variant.name}" - Size ${
+            item.size
+          } không đủ số lượng. Hiện còn ${sizeEntry.stock}`,
         });
       }
+
+      // Thêm version vào item
+      validatedItems.push({
+        ...item,
+        version: variant.__v || 0, // Sử dụng __v của mongoose hoặc 0 nếu không có
+      });
     }
 
+    // Xác định status dựa trên payment method
+    const getInitialStatus = (paymentMethod) => {
+      switch (paymentMethod) {
+        case "MoMo":
+        case "zalopay":
+          return "Chờ thanh toán";
+        case "COD":
+        default:
+          return "Chờ xác nhận";
+      }
+    };
+
+    // Tạo payment details cho MoMo nếu cần
+    let paymentDetails = null;
+    if (paymentMethod === "MoMo" && momoTransactionId) {
+      paymentDetails = {
+        momoTransactionId,
+        refundRequested: false,
+        refundProcessed: false,
+      };
+    }
 
     const orderData = {
       orderId,
       user,
       receiver,
-      items,
+      items: validatedItems,
       totalPrice,
       shippingFee,
       discountAmount,
       finalAmount,
       paymentMethod,
-      orderInfo,
-      extraData,
-      orderGroupId,
       paymentUrl,
+      paymentDetails,
       voucher: appliedVoucher
         ? {
             code: appliedVoucher.code,
@@ -187,41 +221,46 @@ export const createOrder = async (req, res) => {
             maxDiscount: appliedVoucher.maxDiscount,
           }
         : null,
-      status:
-        paymentMethod === "MoMo" || paymentMethod === "zalopay"
-          ? "Chờ thanh toán"
-          : "Chờ xác nhận",
+      status: getInitialStatus(paymentMethod),
     };
 
     const order = new Order(orderData);
     await order.save({ session });
 
-    // ✅ Giảm stock theo sizeId (nên gửi kèm sizeId từ FE)
-    for (const item of items) {
+    // 2. Trừ stock cho từng sản phẩm/size
+    for (const item of validatedItems) {
       const updated = await ProductVariant.updateOne(
-          { _id: item.productVariantId, "sizes.size": item.size },
-          { $inc: { "sizes.$.stock": -item.quantity } },
-          { session }
-        );
+        {
+          _id: item.productVariantId,
+          "sizes.size": item.size,
+        },
+        {
+          $inc: { "sizes.$.stock": -item.quantity },
+        },
+        { session }
+      );
 
       if (!updated.modifiedCount) {
-        throw new Error(`Không trừ được stock cho sản phẩm ${item.productVariantId}, sizeId ${item.sizeId}`);
+        throw new Error(
+          `Không thể trừ stock cho sản phẩm ${item.productVariantId}, size ${item.size}`
+        );
       }
     }
 
-    // ✅ Cập nhật voucher nếu có
+    // 3. Cập nhật voucher nếu có
     if (appliedVoucher) {
       appliedVoucher.usedBy.push(req.user.id);
       appliedVoucher.quantity -= 1;
       await appliedVoucher.save({ session });
     }
 
-    // ✅ Hoàn tất transaction
+    // 4. Commit transaction
     await session.commitTransaction();
-    session.endSession();
 
-    // Gửi email xác nhận đơn hàng
-    const trackingUrl = `http://localhost:5173/order-details/${order._id}`;
+    // 5. Gửi email xác nhận đơn hàng
+    const trackingUrl = `${
+      process.env.FRONTEND_URL || "http://localhost:5173"
+    }/order-details/${order._id}`;
     try {
       await sendOrderEmail({
         to: user.email,
@@ -232,27 +271,42 @@ export const createOrder = async (req, res) => {
       console.error("Gửi email thất bại:", err);
     }
 
-    // Gửi thông báo Telegram cho admin
+    // 6. Gửi thông báo Telegram cho admin
     try {
-      await sendTelegramMessage(`Đã có đơn hàng mới! Vui lòng kiểm tra hệ thống.`);
+      await sendTelegramMessage(
+        `🛒 Đơn hàng mới!\n` +
+          `📋 Mã đơn: ${orderId}\n` +
+          `💰 Tổng tiền: ${finalAmount.toLocaleString("vi-VN")}đ\n` +
+          `💳 Thanh toán: ${paymentMethod}\n` +
+          `📧 Khách hàng: ${user.email}`
+      );
     } catch (err) {
       console.error("Gửi Telegram thất bại:", err);
     }
 
-    return res.status(201).json({ 
-      message: "Order created successfully",
+    return res.status(201).json({
+      message: "Tạo đơn hàng thành công",
       order,
-     });
+      success: true,
+    });
   } catch (error) {
     console.error("Error in createOrder:", error);
 
-    await session.abortTransaction();
-    session.endSession();
+    // Rollback transaction nếu có lỗi
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
 
     return res.status(500).json({
-      message: "Error creating order",
+      message: "Lỗi khi tạo đơn hàng",
       error: error.message,
+      success: false,
     });
+  } finally {
+    // Đảm bảo luôn đóng session
+    if (session) {
+      session.endSession();
+    }
   }
 };
 
@@ -295,7 +349,6 @@ export const cancelOrder = async (req, res) => {
 
     // Cộng lại số lượng tồn kho cho từng sản phẩm/biến thể trong đơn hàng
     for (const item of order.items) {
-
       await ProductVariant.updateOne(
         { _id: item.productVariantId, "sizes.size": item.size },
         { $inc: { "sizes.$.stock": item.quantity } },
@@ -315,7 +368,7 @@ export const cancelOrder = async (req, res) => {
       }
     }
     await order.save({ session });
-    
+
     await session.commitTransaction();
     session.endSession();
     return res.status(200).json({
@@ -396,7 +449,7 @@ export const getOrders = async (req, res) => {
     };
 
     const query = {};
-     if (_userId) {
+    if (_userId) {
       query["user._id"] = _userId;
     }
     if (status && status !== "Tất cả") {

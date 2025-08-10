@@ -2,7 +2,6 @@ export const parseFormData = (body) => {
   const {
     productId,
     sku,
-    price,
     "color.baseColor": baseColor,
     "color.actualColor": actualColor,
     "color.colorName": colorName,
@@ -12,11 +11,13 @@ export const parseFormData = (body) => {
     ...rest
   } = body;
 
-  // Parse sizes
+  // Parse sizes (có thêm price)
   const parsedSizes = sizes.map((sizeObj) => ({
     size: sizeObj.size,
     stock: Number(sizeObj.stock),
+    price: Number(sizeObj.price), // thêm giá vào từng size
   }));
+
   const parsedAttributes = attributes.map((attributeObj) => ({
     attribute: attributeObj.attribute,
     value: attributeObj.value,
@@ -25,7 +26,6 @@ export const parseFormData = (body) => {
   return {
     productId,
     sku,
-    price: Number(price),
     color: {
       baseColor,
       actualColor,

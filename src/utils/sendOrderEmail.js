@@ -21,14 +21,16 @@ export async function sendOrderEmail({ to, order, trackingUrl }) {
 
     <!-- Body -->
     <div style="padding: 24px;">
-      <p style="font-size: 16px; color: #333;">Xin chào <b>${user.email}</b>,</p>
+      <p style="font-size: 16px; color: #333;">Xin chào <b>${to}</b>,</p>
       <p style="font-size: 15px; color: #555; line-height: 1.6;">
         Cảm ơn bạn đã tin tưởng và lựa chọn <b>Elavia</b>. Dưới đây là thông tin chi tiết đơn hàng của bạn:
       </p>
 
       <!-- Order ID -->
       <div style="background: #f1f8ff; padding: 12px 16px; border-left: 4px solid #1976d2; margin: 20px 0; font-size: 15px;">
-        <b>Mã đơn hàng:</b> <span style="color: #1976d2;">${order.orderId}</span>
+        <b>Mã đơn hàng:</b> <span style="color: #1976d2;">${
+          order.orderId
+        }</span>
       </div>
 
       <!-- Order table -->
@@ -42,14 +44,24 @@ export async function sendOrderEmail({ to, order, trackingUrl }) {
           </tr>
         </thead>
         <tbody>
-          ${order.items.map(item => `
+          ${order.items
+            .map(
+              (item) => `
             <tr>
-              <td style="padding: 10px; border: 1px solid #ddd;">${item.productName}</td>
-              <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${item.size}</td>
-              <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${item.quantity}</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${
+                item.productName
+              }</td>
+              <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${
+                item.size
+              }</td>
+              <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${
+                item.quantity
+              }</td>
               <td style="padding: 10px; border: 1px solid #ddd; text-align: right; color: #d32f2f;">${item.price.toLocaleString()}đ</td>
             </tr>
-          `).join("")}
+          `
+            )
+            .join("")}
         </tbody>
       </table>
 
@@ -82,7 +94,6 @@ export async function sendOrderEmail({ to, order, trackingUrl }) {
   </div>
 </div>
 `;
-
 
   await transporter.sendMail({
     from: '"Elavia Shop" <no-reply@elavia.com>',

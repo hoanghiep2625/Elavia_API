@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { version } from "mongoose";
 import mongoosePaginate from "mongoose-paginate-v2";
 
 const { Schema } = mongoose;
@@ -10,21 +10,17 @@ export const OrderItemSchema = new Schema(
       ref: "ProductVariant",
       required: true,
     },
-    productName: {
-      type: String,
-      required: true,
-    },
     quantity: {
       type: Number,
       required: true,
       default: 1,
     },
-    price: {
-      type: Number,
-      required: true,
-    },
     size: {
       type: String,
+      required: true,
+    },
+    version: {
+      type: Number,
       required: true,
     },
     reviewed: { type: Boolean, default: false },
