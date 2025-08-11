@@ -44,6 +44,16 @@ import {
   updateOrderStatus,
 } from "../controllers/order.js";
 import {
+  replyReview,
+  updateReply,
+  deleteReply,
+  deleteReview,
+  getReviewsByOrder,
+  getAllReviews,
+  getReviewById,
+  updateReviewStatus,
+} from "../controllers/review.js";
+import {
   getStats,
   getUserStats,
   getProductStats,
@@ -68,6 +78,7 @@ import {
   deleteVoucher,
   getVoucherById,
 } from "../controllers/vocher.js";
+import { get } from "mongoose";
 const router = Router();
 
 router.use(checkAuthAdmin);
@@ -103,6 +114,13 @@ router.get("/orders/user/:userId", getOrders);
 router.get("/orders/:id", getOrderById);
 router.get("/orders", getAllOrders);
 router.patch("/orders/:id", updateOrderStatus);
+
+router.get("/reviews", getAllReviews);
+router.get("/reviews/:id", getReviewById);
+router.put("/reviews/:id", updateReviewStatus);
+router.delete("/reviews/:id", deleteReview);
+router.put("/reviews/:id/reply", updateReply);
+router.delete("/reviews/:id/reply", deleteReply);
 
 router.get("/stats", getStats);
 router.get("/stats/users", getUserStats);
