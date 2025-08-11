@@ -1,0 +1,165 @@
+[{
+  "_id": {
+    "$oid": "68628cef26a6f00e26c4f4cc"
+  },
+  "name": "Dòng sản phẩm",
+  "slug": "product_line",
+  "values": [
+    "Men",
+    "Ladies",
+    "You"
+  ],
+  "createdAt": {
+    "$date": "2025-06-30T13:11:11.088Z"
+  },
+  "updatedAt": {
+    "$date": "2025-06-30T13:59:04.513Z"
+  }
+},
+{
+  "_id": {
+    "$oid": "68628d1626a6f00e26c4f4df"
+  },
+  "name": "Nhóm sản phẩm",
+  "slug": "product_group",
+  "values": [
+    "Áo",
+    "Quần",
+    "Áo khoác",
+    "Zuýp"
+  ],
+  "createdAt": {
+    "$date": "2025-06-30T13:11:50.794Z"
+  },
+  "updatedAt": {
+    "$date": "2025-07-10T15:25:07.249Z"
+  }
+},
+{
+  "_id": {
+    "$oid": "68628d2f26a6f00e26c4f4e4"
+  },
+  "name": "Cổ áo",
+  "slug": "collar",
+  "values": [
+    "Cổ đức",
+    "Cổ tròn",
+    "Cổ 2 ve",
+    "Cổ chữ V",
+    "Cổ Khác"
+  ],
+  "createdAt": {
+    "$date": "2025-06-30T13:12:15.485Z"
+  },
+  "updatedAt": {
+    "$date": "2025-07-10T15:00:42.339Z"
+  }
+},
+{
+  "_id": {
+    "$oid": "68628d5826a6f00e26c4f4e9"
+  },
+  "name": "Tay áo",
+  "slug": "sleeve",
+  "values": [
+    "Tay cộc",
+    "Tay ngắn",
+    "Tay dài",
+    "Tay liền",
+    "Tay hến",
+    "Sát nách"
+  ],
+  "createdAt": {
+    "$date": "2025-06-30T13:12:56.188Z"
+  },
+  "updatedAt": {
+    "$date": "2025-07-10T14:51:48.579Z"
+  }
+},
+{
+  "_id": {
+    "$oid": "68628d7126a6f00e26c4f4ee"
+  },
+  "name": "Kiểu dáng",
+  "slug": "style",
+  "values": [
+    "Đầm xoè",
+    "Xuông",
+    "Regular",
+    "Bo gấu",
+    "Regular fit",
+    "Slim fit",
+    "Ôm",
+    "Suông",
+    "Chữ A"
+  ],
+  "createdAt": {
+    "$date": "2025-06-30T13:13:21.290Z"
+  },
+  "updatedAt": {
+    "$date": "2025-07-10T15:25:23.245Z"
+  }
+},
+{
+  "_id": {
+    "$oid": "68628d8c26a6f00e26c4f4f3"
+  },
+  "name": "Độ dài",
+  "slug": "length",
+  "values": [
+    "Ngang bắp",
+    "Dài thường",
+    "Croptop",
+    "Qua mắt cá chân",
+    "Ngang gối",
+    "Trên eo",
+    "Trên gối"
+  ],
+  "createdAt": {
+    "$date": "2025-06-30T13:13:48.074Z"
+  },
+  "updatedAt": {
+    "$date": "2025-07-10T15:25:43.300Z"
+  }
+},
+{
+  "_id": {
+    "$oid": "68628da926a6f00e26c4f4f8"
+  },
+  "name": "Hoạ tiết",
+  "slug": "texture",
+  "values": [
+    "Trơn",
+    "Hoa",
+    "Kẻ"
+  ],
+  "createdAt": {
+    "$date": "2025-06-30T13:14:17.092Z"
+  },
+  "updatedAt": {
+    "$date": "2025-06-30T14:01:30.822Z"
+  }
+},
+{
+  "_id": {
+    "$oid": "68628dbe26a6f00e26c4f4fd"
+  },
+  "name": "Chất liệu",
+  "slug": "material",
+  "values": [
+    "Thô",
+    "Thun",
+    "Lụa",
+    "Tencel ",
+    "Tuysi",
+    "Khaki",
+    "Denim",
+    "Ren"
+  ],
+  "createdAt": {
+    "$date": "2025-06-30T13:14:38.383Z"
+  },
+  "updatedAt": {
+    "$date": "2025-07-10T15:25:58.283Z"
+  }
+}]

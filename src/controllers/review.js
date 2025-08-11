@@ -30,10 +30,12 @@ export const createReview = (req, res) => {
         _id: orderId,
         "user._id": req.user.id,
         "items.productVariantId": productVariantId,
-        shippingStatus: { $regex: /^giao hàng thành công$/i },
+        shippingStatus: { $regex: /^Đã nhận hàng$/i },
       });
       if (!hasBought) {
-        return res.status(400).json({ message: "Bạn chỉ có thể đánh giá sản phẩm đã mua." });
+        return res
+          .status(400)
+          .json({ message: "Bạn chỉ có thể đánh giá sản phẩm đã mua." });
       }
 
       // Upload ảnh nếu có
@@ -41,6 +43,7 @@ export const createReview = (req, res) => {
         ? await Promise.all(req.files.map(uploadImageToCloudinary))
         : [];
       const status = await checkCommentWithGemini(comment);
+
       // Tạo review
       const review = await Review.create({
         userId: req.user.id,
@@ -58,13 +61,18 @@ export const createReview = (req, res) => {
         { $set: { "items.$.reviewed": true } }
       );
 
-      return res.status(201).json({ message: "Đánh giá thành công", data: review });
+      return res
+        .status(201)
+        .json({ message: "Đánh giá thành công", data: review });
     } catch (error) {
       if (error.code === 11000) {
-        return res.status(400).json({ message: "Bạn đã đánh giá sản phẩm này trong đơn hàng này." });
+        return res.status(400).json({
+          message: "Bạn đã đánh giá sản phẩm này trong đơn hàng này.",
+        });
       }
       return res.status(500).json({ message: error.message });
-    }});
+    }
+  });
 };
 
 // Lấy danh sách đánh giá theo productVariantId
@@ -182,7 +190,6 @@ export const updateReview = (req, res) => {
   });
 };
 
-
 // Xóa đánh giá (chỉ chủ sở hữu mới được xóa)
 export const deleteReview = async (req, res) => {
   try {
@@ -192,7 +199,6 @@ export const deleteReview = async (req, res) => {
     if (!review) {
       return res.status(404).json({ message: "Đánh giá không tồn tại." });
     }
-
     // Kiểm tra quyền (chỉ admin mới được xóa)
     if (req.user.role !== "3") {
       return res

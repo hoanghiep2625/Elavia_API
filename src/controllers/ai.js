@@ -10,584 +10,463 @@ const chatModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
 // Configuration constants
 const CONFIG = {
-  SIMILARITY_THRESHOLD: 0.4, // Giảm threshold để dễ tìm hơn
+  SIMILARITY_THRESHOLD: 0.25, // Giảm threshold để dễ tìm hơn
   MAX_RESULTS: 5,
   EMBEDDING_BATCH_SIZE: 10,
   TEXT_SEARCH_WEIGHT: 0.7, // Ưu tiên text search
   SEMANTIC_SEARCH_WEIGHT: 0.3,
 };
 
-// Keywords and patterns
-const PATTERNS = {
-  GREETING: [
-    "chào",
-    "hello",
-    "hi",
-    "hey",
-    "xin chào",
-    "alo",
-    "good morning",
-    "good afternoon",
-    "good evening",
-    "chào bạn",
-    "chào shop",
-  ],
+// Từ khóa thông dụng cho thời trang
+const FASHION_KEYWORDS = {
+  // Dòng sản phẩm
+  nam: ["men", "nam", "nam giới"],
+  nữ: ["ladies", "nữ", "phụ nữ", "women"],
+  unisex: ["you", "unisex", "nam nữ"],
 
-  COLOR_MAP: {
-    // Vietnamese colors
-    xanh: "blue",
-    "xanh dương": "blue",
-    "xanh navy": "blue",
-    navy: "blue",
-    "xanh lá": "green",
-    "xanh lục": "green",
-    đỏ: "red",
-    "đỏ tươi": "red",
-    "đỏ đậm": "red",
-    vàng: "yellow",
-    "vàng gold": "yellow",
-    "vàng nghệ": "yellow",
-    đen: "black",
-    "đen nhám": "black",
-    "đen bóng": "black",
-    trắng: "white",
-    "trắng sữa": "white",
-    "trắng ngà": "white",
-    hồng: "pink",
-    "hồng phấn": "pink",
-    "hồng đào": "pink",
-    tím: "purple",
-    "tím than": "purple",
-    "tím lavender": "purple",
-    cam: "orange",
-    "cam đất": "orange",
-    "cam neon": "orange",
-    nâu: "brown",
-    "nâu đất": "brown",
-    "nâu cafe": "brown",
-    xám: "gray",
-    "xám nhạt": "gray",
-    "xám đậm": "gray",
-    // English colors
-    blue: "blue",
-    green: "green",
-    red: "red",
-    yellow: "yellow",
-    black: "black",
-    white: "white",
-    pink: "pink",
-    purple: "purple",
-    orange: "orange",
-    brown: "brown",
-    gray: "gray",
-    grey: "gray",
-  },
+  // Nhóm sản phẩm
+  áo: ["áo", "shirt", "top", "blouse"],
+  quần: ["quần", "pants", "trousers", "jean"],
+  "áo khoác": ["áo khoác", "jacket", "coat", "blazer"],
+  váy: ["váy", "zuýp", "dress", "skirt"],
 
-  SIZE_MAP: {
-    s: "S",
-    "size s": "S",
-    small: "S",
-    m: "M",
-    "size m": "M",
-    medium: "M",
-    vừa: "M",
-    l: "L",
-    "size l": "L",
-    large: "L",
-    lớn: "L",
-    xl: "XL",
-    "size xl": "XL",
-    "extra large": "XL",
-    xxl: "XXL",
-    "2xl": "XXL",
-    "size xxl": "XXL",
-  },
+  // Cổ áo
+  "cổ tròn": ["cổ tròn", "round neck", "crew neck"],
+  "cổ v": ["cổ v", "cổ chữ v", "v neck"],
+  "cổ đức": ["cổ đức", "polo", "collar"],
 
-  // Material mapping
-  MATERIAL_MAP: {
-    cotton: "Cotton",
-    bông: "Cotton",
-    "cô tông": "Cotton",
-    thô: "Thô",
-    "vải thô": "Thô",
-    linen: "Thô",
-    jean: "Jean",
-    denim: "Jean",
-    jeans: "Jean",
-    kaki: "Kaki",
-    khaki: "Kaki",
-    polyester: "Polyester",
-    poly: "Polyester",
-    viscose: "Viscose",
-    tencel: "Tencel",
-    spandex: "Spandex",
-    lycra: "Spandex",
-    wool: "Wool",
-    len: "Wool",
-    "lông cừu": "Wool",
-    silk: "Silk",
-    lụa: "Silk",
-    "tơ tằm": "Silk",
-    da: "Da",
-    leather: "Da",
-    "da thật": "Da",
-    nỉ: "Nỉ",
-    fleece: "Nỉ",
-    "nỉ bông": "Nỉ",
-  },
+  // Tay áo
+  "tay ngắn": ["tay ngắn", "tay cộc", "short sleeve"],
+  "tay dài": ["tay dài", "long sleeve"],
+  "sát nách": ["sát nách", "tank top", "sleeveless"],
 
-  // Gender/Product line mapping
-  GENDER_MAP: {
-    nam: "Men",
-    men: "Men",
-    male: "Men",
-    "đàn ông": "Men",
-    nữ: "Women",
-    women: "Women",
-    female: "Women",
-    "đàn bà": "Women",
-    "phụ nữ": "Women",
-    unisex: "Unisex",
-    "cả nam và nữ": "Unisex",
-  },
+  // Chất liệu
+  cotton: ["thun", "cotton", "co tô"],
+  jean: ["jean", "denim"],
+  lụa: ["lụa", "silk"],
+  khaki: ["khaki", "vải khaki"],
 
-  // Product group mapping
-  PRODUCT_GROUP_MAP: {
-    áo: "Áo",
-    shirt: "Áo",
-    top: "Áo",
-    blouse: "Áo",
-    quần: "Quần",
-    pants: "Quần",
-    trouser: "Quần",
-    bottom: "Quần",
-    váy: "Váy",
-    dress: "Váy",
-    skirt: "Váy",
-    đầm: "Đầm",
-    gown: "Đầm",
-    "áo khoác": "Áo khoác",
-    jacket: "Áo khoác",
-    coat: "Áo khoác",
-    "phụ kiện": "Phụ kiện",
-    accessories: "Phụ kiện",
-  },
-
-  PRICE_PATTERNS: [
-    /dưới\s+(\d+(?:\.\d+)?)\s*(?:k|nghìn|triệu)?/i,
-    /under\s+(\d+(?:\.\d+)?)\s*(?:k|thousand)?/i,
-    /từ\s+(\d+(?:\.\d+)?)\s*(?:k|nghìn|triệu)?\s*đến\s+(\d+(?:\.\d+)?)\s*(?:k|nghìn|triệu)?/i,
-    /(\d+(?:\.\d+)?)\s*(?:k|nghìn|triệu)?\s*-\s*(\d+(?:\.\d+)?)\s*(?:k|nghìn|triệu)?/i,
-  ],
+  // Màu sắc cơ bản
+  đen: ["đen", "black"],
+  trắng: ["trắng", "white"],
+  xanh: ["xanh", "blue"],
+  đỏ: ["đỏ", "red"],
+  vàng: ["vàng", "yellow"],
+  hồng: ["hồng", "pink"],
 };
 
-// Utility functions
-const utils = {
-  cosineSimilarity(vecA, vecB) {
-    if (
-      !Array.isArray(vecA) ||
-      !Array.isArray(vecB) ||
-      vecA.length !== vecB.length
-    ) {
-      return 0;
+// Helper function để xử lý từ khóa thông dụng
+function expandSearchQuery(query) {
+  const lowerQuery = query.toLowerCase().trim();
+  const expandedTerms = [lowerQuery];
+
+  // Mở rộng từ khóa dựa trên FASHION_KEYWORDS
+  Object.entries(FASHION_KEYWORDS).forEach(([key, synonyms]) => {
+    if (synonyms.some((synonym) => lowerQuery.includes(synonym))) {
+      expandedTerms.push(...synonyms);
     }
+  });
 
-    const dot = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
-    const normA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
-    const normB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
+  return [...new Set(expandedTerms)]; // Loại bỏ trùng lặp
+}
 
-    if (normA === 0 || normB === 0) return 0;
-    return dot / (normA * normB);
-  },
-
-  // Text similarity for direct name/description matching
-  calculateTextSimilarity(query, variant) {
-    const queryWords = query
-      .toLowerCase()
-      .split(/\s+/)
-      .filter((word) => word.length > 2); // Ignore short words
-
-    if (queryWords.length === 0) return 0;
-
-    const productName = variant.productId?.name?.toLowerCase() || "";
-    const description = variant.productId?.description?.toLowerCase() || "";
-    const attributes =
-      variant.attributes
-        ?.map((attr) => `${attr.attribute} ${attr.value}`.toLowerCase())
-        .join(" ") || "";
-
-    const searchText = `${productName} ${description} ${attributes}`;
-
-    let matchedWords = 0;
-    let exactMatches = 0;
-
-    queryWords.forEach((word) => {
-      if (searchText.includes(word)) {
-        matchedWords++;
-        // Bonus for exact matches in product name
-        if (productName.includes(word)) {
-          exactMatches++;
-        }
-      }
-    });
-
-    const matchRatio = matchedWords / queryWords.length;
-    const exactRatio = exactMatches / queryWords.length;
-
-    // Weighted score: 70% for general matches, 30% bonus for exact name matches
-    return matchRatio * 0.7 + exactRatio * 0.3;
-  },
-
-  // Combined scoring function
-  calculateCombinedScore(query, queryEmbedding, variant) {
-    const textScore = utils.calculateTextSimilarity(query, variant);
-
-    let semanticScore = 0;
-    if (Array.isArray(variant.embedding) && variant.embedding.length > 0) {
-      semanticScore = utils.cosineSimilarity(queryEmbedding, variant.embedding);
-    }
-
-    // Combined score with weights
-    const combinedScore =
-      textScore * CONFIG.TEXT_SEARCH_WEIGHT +
-      semanticScore * CONFIG.SEMANTIC_SEARCH_WEIGHT;
-
-    return {
-      combinedScore,
-      textScore,
-      semanticScore,
-    };
-  },
-
-  isGreeting(text) {
-    const normalized = text.toLowerCase().trim();
-    return PATTERNS.GREETING.some(
-      (keyword) =>
-        normalized.includes(keyword) ||
-        normalized.startsWith(keyword.split(" ")[0])
-    );
-  },
-
-  extractFilters(text) {
-    const filters = {
-      colors: [],
-      sizes: [],
-      materials: [],
-      genders: [],
-      productGroups: [],
-      priceRange: null,
-    };
-
-    const lowerText = text.toLowerCase();
-
-    // Extract colors
-    for (const [keyword, baseColor] of Object.entries(PATTERNS.COLOR_MAP)) {
-      if (lowerText.includes(keyword)) {
-        if (!filters.colors.includes(baseColor)) {
-          filters.colors.push(baseColor);
-        }
-      }
-    }
-
-    // Extract sizes
-    for (const [keyword, size] of Object.entries(PATTERNS.SIZE_MAP)) {
-      if (lowerText.includes(keyword)) {
-        if (!filters.sizes.includes(size)) {
-          filters.sizes.push(size);
-        }
-      }
-    }
-
-    // Extract materials
-    for (const [keyword, material] of Object.entries(PATTERNS.MATERIAL_MAP)) {
-      if (lowerText.includes(keyword)) {
-        if (!filters.materials.includes(material)) {
-          filters.materials.push(material);
-        }
-      }
-    }
-
-    // Extract genders
-    for (const [keyword, gender] of Object.entries(PATTERNS.GENDER_MAP)) {
-      if (lowerText.includes(keyword)) {
-        if (!filters.genders.includes(gender)) {
-          filters.genders.push(gender);
-        }
-      }
-    }
-
-    // Extract product groups
-    for (const [keyword, group] of Object.entries(PATTERNS.PRODUCT_GROUP_MAP)) {
-      if (lowerText.includes(keyword)) {
-        if (!filters.productGroups.includes(group)) {
-          filters.productGroups.push(group);
-        }
-      }
-    }
-
-    // Extract price range (keep existing logic)
-    for (const pattern of PATTERNS.PRICE_PATTERNS) {
-      const match = lowerText.match(pattern);
-      if (match) {
-        if (match[1] && match[2]) {
-          filters.priceRange = {
-            min:
-              parseFloat(match[1]) *
-              (lowerText.includes("triệu") ? 1000000 : 1000),
-            max:
-              parseFloat(match[2]) *
-              (lowerText.includes("triệu") ? 1000000 : 1000),
-          };
-        } else if (match[1]) {
-          filters.priceRange = {
-            min: 0,
-            max:
-              parseFloat(match[1]) *
-              (lowerText.includes("triệu") ? 1000000 : 1000),
-          };
-        }
-        break;
-      }
-    }
-
-    return filters;
-  },
-
-  applyFilters(variants, filters) {
-    return variants.filter((variant) => {
-      // Color filter
-      if (filters.colors.length > 0) {
-        const variantColor = variant.color?.baseColor?.toLowerCase();
-        if (!variantColor || !filters.colors.includes(variantColor)) {
-          return false;
-        }
-      }
-
-      // Size filter
-      if (filters.sizes.length > 0) {
-        const availableSizes = variant.sizes?.map((s) => s.size) || [];
-        if (!filters.sizes.some((size) => availableSizes.includes(size))) {
-          return false;
-        }
-      }
-
-      // Material filter
-      if (filters.materials.length > 0) {
-        const materialAttr = variant.attributes?.find(
-          (attr) => attr.attribute === "material"
-        );
-        const variantMaterial = materialAttr?.value;
-        if (!variantMaterial || !filters.materials.includes(variantMaterial)) {
-          return false;
-        }
-      }
-
-      // Gender filter
-      if (filters.genders.length > 0) {
-        const genderAttr = variant.attributes?.find(
-          (attr) => attr.attribute === "product_line"
-        );
-        const variantGender = genderAttr?.value;
-        if (!variantGender || !filters.genders.includes(variantGender)) {
-          return false;
-        }
-      }
-
-      // Product group filter
-      if (filters.productGroups.length > 0) {
-        const groupAttr = variant.attributes?.find(
-          (attr) => attr.attribute === "product_group"
-        );
-        const variantGroup = groupAttr?.value;
-        if (!variantGroup || !filters.productGroups.includes(variantGroup)) {
-          return false;
-        }
-      }
-
-      // Price filter
-      if (filters.priceRange) {
-        const price = variant.price || 0;
-        if (price < filters.priceRange.min || price > filters.priceRange.max) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  },
-
-  async getEmbedding(text) {
-    try {
-      const result = await embeddingModel.embedContent(text);
-      return result.embedding.values;
-    } catch (error) {
-      console.error("Embedding error:", error);
-      return null;
-    }
-  },
-
-  async generateResponse(question, hasProducts, filters) {
-    const context = hasProducts
-      ? "có sản phẩm phù hợp"
-      : "không có sản phẩm phù hợp";
-
-    const filterInfo = [];
-    if (filters.colors.length > 0)
-      filterInfo.push(`màu ${filters.colors.join(", ")}`);
-    if (filters.sizes.length > 0)
-      filterInfo.push(`size ${filters.sizes.join(", ")}`);
-    if (filters.materials.length > 0)
-      filterInfo.push(`chất liệu ${filters.materials.join(", ")}`);
-    if (filters.genders.length > 0)
-      filterInfo.push(`dành cho ${filters.genders.join(", ")}`);
-    if (filters.productGroups.length > 0)
-      filterInfo.push(`loại ${filters.productGroups.join(", ")}`);
-    if (filters.priceRange) {
-      const { min, max } = filters.priceRange;
-      filterInfo.push(
-        `giá từ ${min.toLocaleString()} - ${max.toLocaleString()}₫`
-      );
-    }
-
-    const prompt = `
-Bạn là tư vấn viên bán hàng thân thiện và chuyên nghiệp.
-
-Câu hỏi: "${question}"
-Trạng thái: ${context}
-${filterInfo.length > 0 ? `Tiêu chí: ${filterInfo.join(", ")}` : ""}
-
-Quy tắc trả lời:
-- Nếu có sản phẩm: "Mình đã tìm thấy một vài sản phẩm phù hợp với yêu cầu của bạn!"
-- Nếu không có: "Rất tiếc, hiện tại không có sản phẩm nào phù hợp với yêu cầu này."
-- Không liệt kê sản phẩm cụ thể
-- Giọng điệu thân thiện, ngắn gọn
-- Chỉ trả lời bằng tiếng Việt
-`;
-
-    try {
-      const result = await chatModel.generateContent(prompt);
-      return (
-        result.response.candidates[0]?.content?.parts[0]?.text ||
-        "Xin lỗi, tôi không thể trả lời lúc này."
-      );
-    } catch (error) {
-      console.error("AI response error:", error);
-      return "Đã xảy ra lỗi khi xử lý câu hỏi của bạn.";
-    }
-  },
-};
-
-// Main controller
-export const chatWithAI = async (req, res) => {
+// Cấu hình AI search suggestions
+export const searchSuggestions = async (req, res) => {
   try {
-    const { question } = req.body;
+    const { query } = req.body;
 
-    // Validate input
-    if (!question?.trim()) {
-      return res.status(400).json({
-        message: "Vui lòng nhập câu hỏi",
-      });
-    }
-
-    const normalizedQuestion = question.trim();
-
-    // Handle greetings
-    if (utils.isGreeting(normalizedQuestion)) {
+    if (!query || query.trim().length < 2) {
       return res.json({
-        answer:
-          "Chào bạn! Mình có thể giúp bạn tìm kiếm sản phẩm. Bạn cần tìm gì hôm nay? 😊",
-        relatedProducts: [],
+        success: true,
+        suggestions: [],
+        message: "Query quá ngắn",
       });
     }
 
-    // Extract filters from question
-    const filters = utils.extractFilters(normalizedQuestion);
+    const searchQuery = query.trim().toLowerCase();
+    const expandedQueries = expandSearchQuery(searchQuery);
+    console.log("🔍 Searching for:", searchQuery);
+    console.log("📝 Expanded queries:", expandedQueries);
 
-    // Get embedding for semantic search
-    const queryEmbedding = await utils.getEmbedding(normalizedQuestion);
-    if (!queryEmbedding) {
-      return res.status(500).json({
-        message: "Lỗi khi xử lý câu hỏi",
-      });
-    }
+    // Tạo regex pattern cho tất cả từ khóa mở rộng
+    const regexPattern = expandedQueries
+      .map(
+        (term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") // Escape special regex chars
+      )
+      .join("|");
 
-    // Fetch and filter variants
-    let variants = await ProductVariant.find()
-      .populate({
-        path: "productId",
-        select: "name description category brand",
-      })
-      .lean(); // Use lean for better performance
-
-    // Apply filters
-    variants = utils.applyFilters(variants, filters);
-
-    // If no products found
-    if (variants.length === 0) {
-      const answer = await utils.generateResponse(
-        normalizedQuestion,
-        false,
-        filters
-      );
-      return res.json({
-        answer,
-        relatedProducts: [],
-      });
-    }
-
-    // Calculate similarities and get top matches
-    const variantsWithScore = variants
-      .map((variant) => {
-        const scores = utils.calculateCombinedScore(
-          normalizedQuestion,
-          queryEmbedding,
-          variant
-        );
-        return {
-          variant,
-          ...scores,
-        };
-      })
-      .filter((item) => item.combinedScore > 0.1) // Very low threshold to catch more results
-      .sort((a, b) => {
-        // First sort by combined score
-        if (Math.abs(a.combinedScore - b.combinedScore) > 0.1) {
-          return b.combinedScore - a.combinedScore;
-        }
-        // If scores are close, prioritize text matches
-        return b.textScore - a.textScore;
-      })
-      .slice(0, CONFIG.MAX_RESULTS);
-
-    // Generate AI response
-    const hasRelevantProducts = variantsWithScore.length > 0;
-    const answer = await utils.generateResponse(
-      normalizedQuestion,
-      hasRelevantProducts,
-      filters
-    );
-
-    // Return results
-    res.json({
-      answer,
-      relatedProducts: variantsWithScore.map((item) => item.variant),
-      searchInfo: {
-        totalFound: variants.length,
-        relevantFound: variantsWithScore.length,
-        filters: filters,
-        searchDetails: variantsWithScore.slice(0, 3).map((item) => ({
-          productName: item.variant.productId?.name,
-          textScore: Math.round(item.textScore * 100) / 100,
-          semanticScore: Math.round(item.semanticScore * 100) / 100,
-          combinedScore: Math.round(item.combinedScore * 100) / 100,
-        })),
+    // 1. Text search với aggregate để có thể search nested fields và attributes
+    const textSearchResults = await ProductVariant.aggregate([
+      {
+        $lookup: {
+          from: "products",
+          localField: "productId",
+          foreignField: "_id",
+          as: "productInfo",
+        },
       },
-    });
+      {
+        $unwind: "$productInfo",
+      },
+      {
+        $match: {
+          $or: [
+            { "productInfo.name": { $regex: regexPattern, $options: "i" } },
+            {
+              "productInfo.shortDescription": {
+                $regex: regexPattern,
+                $options: "i",
+              },
+            },
+            {
+              "productInfo.description": {
+                $regex: regexPattern,
+                $options: "i",
+              },
+            },
+            { "color.colorName": { $regex: regexPattern, $options: "i" } },
+            { "color.baseColor": { $regex: regexPattern, $options: "i" } },
+            { sku: { $regex: regexPattern, $options: "i" } },
+            { "attributes.attribute": { $regex: regexPattern, $options: "i" } },
+            { "attributes.value": { $regex: regexPattern, $options: "i" } },
+          ],
+          status: true, // Chỉ lấy sản phẩm active
+        },
+      },
+      {
+        $addFields: {
+          // Tính giá nhỏ nhất của variant
+          minPrice: { $min: "$sizes.price" },
+          maxPrice: { $max: "$sizes.price" },
+          totalStock: { $sum: "$sizes.stock" },
+          hasStock: { $gt: [{ $sum: "$sizes.stock" }, 0] },
+        },
+      },
+      {
+        $match: {
+          hasStock: true, // Chỉ lấy sản phẩm còn hàng
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          productId: {
+            _id: "$productInfo._id",
+            name: "$productInfo.name",
+            shortDescription: "$productInfo.shortDescription",
+            categoryId: "$productInfo.categoryId",
+          },
+          color: 1,
+          images: 1,
+          sizes: 1,
+          attributes: 1,
+          sku: 1,
+          minPrice: 1,
+          maxPrice: 1,
+          totalStock: 1,
+          price: "$minPrice", // Sử dụng giá nhỏ nhất để hiển thị
+          relevanceScore: {
+            $add: [
+              // Điểm cao cho tên sản phẩm
+              {
+                $cond: {
+                  if: {
+                    $regexMatch: {
+                      input: "$productInfo.name",
+                      regex: regexPattern,
+                      options: "i",
+                    },
+                  },
+                  then: 15,
+                  else: 0,
+                },
+              },
+              // Điểm cho attributes
+              {
+                $cond: {
+                  if: {
+                    $gt: [
+                      {
+                        $size: {
+                          $filter: {
+                            input: "$attributes",
+                            cond: {
+                              $or: [
+                                {
+                                  $regexMatch: {
+                                    input: "$$this.attribute",
+                                    regex: regexPattern,
+                                    options: "i",
+                                  },
+                                },
+                                {
+                                  $regexMatch: {
+                                    input: "$$this.value",
+                                    regex: regexPattern,
+                                    options: "i",
+                                  },
+                                },
+                              ],
+                            },
+                          },
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                  then: 12,
+                  else: 0,
+                },
+              },
+              // Điểm cho SKU (exact match cao hơn)
+              {
+                $cond: {
+                  if: {
+                    $regexMatch: {
+                      input: "$sku",
+                      regex: regexPattern,
+                      options: "i",
+                    },
+                  },
+                  then: 10,
+                  else: 0,
+                },
+              },
+              // Điểm cho màu sắc
+              {
+                $cond: {
+                  if: {
+                    $or: [
+                      {
+                        $regexMatch: {
+                          input: "$color.colorName",
+                          regex: regexPattern,
+                          options: "i",
+                        },
+                      },
+                      {
+                        $regexMatch: {
+                          input: "$color.baseColor",
+                          regex: regexPattern,
+                          options: "i",
+                        },
+                      },
+                    ],
+                  },
+                  then: 8,
+                  else: 0,
+                },
+              },
+              // Điểm cho mô tả
+              {
+                $cond: {
+                  if: {
+                    $or: [
+                      {
+                        $regexMatch: {
+                          input: "$productInfo.shortDescription",
+                          regex: regexPattern,
+                          options: "i",
+                        },
+                      },
+                      {
+                        $regexMatch: {
+                          input: "$productInfo.description",
+                          regex: regexPattern,
+                          options: "i",
+                        },
+                      },
+                    ],
+                  },
+                  then: 5,
+                  else: 0,
+                },
+              },
+              // Bonus cho sản phẩm có nhiều stock
+              {
+                $cond: {
+                  if: { $gt: ["$totalStock", 10] },
+                  then: 2,
+                  else: 0,
+                },
+              },
+            ],
+          },
+        },
+      },
+      {
+        $sort: {
+          relevanceScore: -1,
+          totalStock: -1, // Ưu tiên sản phẩm có nhiều hàng
+          minPrice: 1,
+        },
+      },
+      {
+        $limit: 8,
+      },
+    ]);
+
+    console.log(`📊 Text search found: ${textSearchResults.length} results`);
+
+    if (textSearchResults.length >= 5) {
+      // Nếu đã có đủ kết quả từ text search, trả về luôn
+      return res.json({
+        success: true,
+        suggestions: textSearchResults.slice(0, 5),
+        method: "text_search",
+        debug: {
+          query: searchQuery,
+          expandedQueries: expandedQueries,
+          textResults: textSearchResults.length,
+        },
+      });
+    }
+
+    // 2. Nếu text search không đủ, thêm semantic search
+    try {
+      console.log("🤖 Running semantic search...");
+      const embeddingResult = await embeddingModel.embedContent(searchQuery);
+      const queryEmbedding = embeddingResult.embedding.values;
+
+      const semanticResults = await ProductVariant.aggregate([
+        {
+          $match: {
+            embedding: { $exists: true, $ne: null, $not: { $size: 0 } },
+            status: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "products",
+            localField: "productId",
+            foreignField: "_id",
+            as: "productInfo",
+          },
+        },
+        {
+          $unwind: "$productInfo",
+        },
+        {
+          $addFields: {
+            similarity: {
+              $let: {
+                vars: {
+                  dotProduct: {
+                    $reduce: {
+                      input: {
+                        $range: [
+                          0,
+                          {
+                            $min: [
+                              { $size: "$embedding" },
+                              queryEmbedding.length,
+                            ],
+                          },
+                        ],
+                      },
+                      initialValue: 0,
+                      in: {
+                        $add: [
+                          "$$value",
+                          {
+                            $multiply: [
+                              { $arrayElemAt: ["$embedding", "$$this"] },
+                              { $arrayElemAt: [queryEmbedding, "$$this"] },
+                            ],
+                          },
+                        ],
+                      },
+                    },
+                  },
+                },
+                in: "$$dotProduct",
+              },
+            },
+            minPrice: { $min: "$sizes.price" },
+            hasStock: { $gt: [{ $sum: "$sizes.stock" }, 0] },
+          },
+        },
+        {
+          $match: {
+            similarity: { $gte: CONFIG.SIMILARITY_THRESHOLD },
+            hasStock: true,
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            productId: {
+              _id: "$productInfo._id",
+              name: "$productInfo.name",
+              shortDescription: "$productInfo.shortDescription",
+              categoryId: "$productInfo.categoryId",
+            },
+            color: 1,
+            images: 1,
+            sizes: 1,
+            sku: 1,
+            price: "$minPrice",
+            similarity: 1,
+          },
+        },
+        { $sort: { similarity: -1 } },
+        { $limit: 8 },
+      ]);
+
+      console.log(
+        `🎯 Semantic search found: ${semanticResults.length} results`
+      );
+
+      // Kết hợp kết quả và loại bỏ trùng lặp
+      const combinedResults = [...textSearchResults];
+      const existingIds = new Set(
+        textSearchResults.map((item) => item._id.toString())
+      );
+
+      for (const semanticResult of semanticResults) {
+        if (
+          !existingIds.has(semanticResult._id.toString()) &&
+          combinedResults.length < 5
+        ) {
+          combinedResults.push(semanticResult);
+        }
+      }
+
+      res.json({
+        success: true,
+        suggestions: combinedResults.slice(0, 5),
+        method: "combined_search",
+        debug: {
+          query: searchQuery,
+          textResults: textSearchResults.length,
+          semanticResults: semanticResults.length,
+          combinedResults: combinedResults.length,
+        },
+      });
+    } catch (embeddingError) {
+      // Fallback về text search nếu có lỗi embedding
+      console.log(
+        "❌ Embedding error, fallback to text search:",
+        embeddingError.message
+      );
+
+      res.json({
+        success: true,
+        suggestions: textSearchResults.slice(0, 5),
+        method: "text_search_fallback",
+        debug: {
+          query: searchQuery,
+          error: embeddingError.message,
+          textResults: textSearchResults.length,
+        },
+      });
+    }
   } catch (error) {
-    console.error("Chat AI Error:", error);
+    console.error("💥 Search suggestions error:", error);
     res.status(500).json({
-      message: "Đã xảy ra lỗi khi xử lý yêu cầu",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      success: false,
+      message: "Lỗi tìm kiếm gợi ý",
+      error: error.message,
     });
   }
 };

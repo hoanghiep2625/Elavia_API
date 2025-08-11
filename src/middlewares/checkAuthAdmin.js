@@ -5,13 +5,19 @@ import User from "../models/user.js";
 dotenv.config();
 
 export const checkAuthAdmin = (req, res, next) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  const token2 = req.header("Authorization")?.replace("Bearer ", "");
+  // Kiểm tra token từ Authorization header hoặc cookies
+  let token = req.headers.authorization?.split(" ")[1];
+
+  if (!token && req.cookies) {
+    token = req.cookies.token;
+  }
+
   if (!token) return res.status(401).json({ message: "Không có token" });
 
   try {
     const decoded = jwt.verify(token, process.env.SECRET_KEY);
-    if (decoded.role !== "3") {
+    // Sửa logic role: 1 = user, 3 = admin
+    if (decoded.role !== 3 && decoded.role !== "3") {
       return res.status(403).json({ message: "Không có quyền admin" });
     }
     req.admin = decoded;
@@ -50,3 +56,5 @@ export const getAdminProfile = async (req, res) => {
     res.status(401).json({ message: "Invalid token", error: error.message });
   }
 };
+
+export default checkAuthAdmin;

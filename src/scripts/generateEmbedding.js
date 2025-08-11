@@ -16,12 +16,35 @@ console.log("✅ Connected to DB");
 async function generateText(variant) {
   await variant.populate("productId");
   const p = variant.productId;
+
+  // Tạo text phong phú hơn với attributes
+  const attributesText = variant.attributes
+    .map((attr) => `${attr.attribute}: ${attr.value}`)
+    .join(", ");
+
+  const sizesText = variant.sizes
+    .map((s) => `Size ${s.size}: ${s.price.toLocaleString()}₫ (${s.stock} sp)`)
+    .join(", ");
+
+  const priceRange =
+    variant.sizes.length > 1
+      ? `${Math.min(
+          ...variant.sizes.map((s) => s.price)
+        ).toLocaleString()}₫ - ${Math.max(
+          ...variant.sizes.map((s) => s.price)
+        ).toLocaleString()}₫`
+      : `${variant.sizes[0]?.price?.toLocaleString() || 0}₫`;
+
   return `
-Tên: ${p?.name || ""}
-Mô tả: ${p?.description || ""}
-Giá: ${variant.price}₫
-Màu: ${variant.color.colorName}
-Size: ${variant.sizes.map((s) => s.size).join(", ")}
+Sản phẩm: ${p?.name || ""}
+Mô tả: ${p?.description?.replace(/<[^>]*>/g, "") || p?.shortDescription || ""}
+Giá: ${priceRange}
+Màu sắc: ${variant.color.colorName} (${variant.color.baseColor})
+Kích thước: ${variant.sizes.map((s) => s.size).join(", ")}
+Thuộc tính: ${attributesText}
+SKU: ${variant.sku}
+Chi tiết giá theo size: ${sizesText}
+Loại: thời trang, quần áo
 `.trim();
 }
 

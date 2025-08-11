@@ -5,10 +5,16 @@ import dotenv from "dotenv";
 dotenv.config();
 
 export const checkAuth = async (req, res, next) => {
-  const token = req.header("Authorization")?.replace("Bearer ", "");
+  // Kiểm tra token từ Authorization header hoặc cookies
+  let token = req.header("Authorization")?.replace("Bearer ", "");
+
+  if (!token && req.cookies) {
+    token = req.cookies.token;
+  }
+
   if (!token) {
     return res.status(401).json({
-      message: "Bạn không có quyền truy cậpp",
+      message: "Bạn không có quyền truy cập",
     });
   }
 
@@ -33,3 +39,5 @@ export const checkAuth = async (req, res, next) => {
     });
   }
 };
+
+export default checkAuth;
