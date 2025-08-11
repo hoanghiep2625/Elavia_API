@@ -29,16 +29,19 @@ export const createReview = (req, res) => {
         _id: orderId,
         "user._id": req.user.id,
         "items.productVariantId": productVariantId,
-        status: { $regex: /^giao hàng thành công$/i }
+        shippingStatus: { $regex: /^Đã nhận hàng$/i },
       });
       if (!hasBought) {
-        return res.status(400).json({ message: "Bạn chỉ có thể đánh giá sản phẩm đã mua." });
+        return res
+          .status(400)
+          .json({ message: "Bạn chỉ có thể đánh giá sản phẩm đã mua." });
       }
 
       // Upload ảnh nếu có
-      const images = req.files && req.files.length > 0
-        ? await Promise.all(req.files.map(uploadImageToCloudinary))
-        : [];
+      const images =
+        req.files && req.files.length > 0
+          ? await Promise.all(req.files.map(uploadImageToCloudinary))
+          : [];
 
       // Tạo review
       const review = await Review.create({
@@ -56,13 +59,18 @@ export const createReview = (req, res) => {
         { $set: { "items.$.reviewed": true } }
       );
 
-      return res.status(201).json({ message: "Đánh giá thành công", data: review });
+      return res
+        .status(201)
+        .json({ message: "Đánh giá thành công", data: review });
     } catch (error) {
       if (error.code === 11000) {
-        return res.status(400).json({ message: "Bạn đã đánh giá sản phẩm này trong đơn hàng này." });
+        return res.status(400).json({
+          message: "Bạn đã đánh giá sản phẩm này trong đơn hàng này.",
+        });
       }
       return res.status(500).json({ message: error.message });
-    }});
+    }
+  });
 };
 
 // Lấy danh sách đánh giá theo productVariantId
@@ -72,7 +80,7 @@ export const getReviewsByProductVariant = async (req, res) => {
     const reviews = await Review.find({ productVariantId })
       .select("rating comment images createdAt userId orderId productVariantId")
       .populate("userId", "name")
-      .populate("orderId", "orderId")
+      .populate("orderId", "orderId");
     return res.status(200).json({ data: reviews });
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -99,10 +107,14 @@ export const updateReview = (req, res) => {
       }
 
       if (review.userId.toString() !== req.user.id.toString()) {
-        return res.status(403).json({ message: "Bạn không có quyền sửa đánh giá này." });
+        return res
+          .status(403)
+          .json({ message: "Bạn không có quyền sửa đánh giá này." });
       }
       if (review.updatedCount >= 1) {
-        return res.status(403).json({ message: "Bạn chỉ được chỉnh sửa đánh giá 1 lần." });
+        return res
+          .status(403)
+          .json({ message: "Bạn chỉ được chỉnh sửa đánh giá 1 lần." });
       }
       review.rating = rating ?? review.rating;
       review.comment = comment ?? review.comment;
@@ -118,7 +130,9 @@ export const updateReview = (req, res) => {
             }
           })
         );
-        review.images = review.images.filter((img) => !removedImages.includes(img.public_id));
+        review.images = review.images.filter(
+          (img) => !removedImages.includes(img.public_id)
+        );
       }
 
       // 📤 UPLOAD ẢNH MỚI
@@ -130,7 +144,11 @@ export const updateReview = (req, res) => {
                 { folder: "products" },
                 (error, result) => {
                   if (error) reject(error);
-                  else resolve({ url: result.secure_url, public_id: result.public_id });
+                  else
+                    resolve({
+                      url: result.secure_url,
+                      public_id: result.public_id,
+                    });
                 }
               );
               stream.end(file.buffer);
@@ -144,16 +162,14 @@ export const updateReview = (req, res) => {
       review.updatedCount += 1;
       await review.save();
 
-      return res.status(200).json({ message: "Sửa đánh giá thành công", data: review });
+      return res
+        .status(200)
+        .json({ message: "Sửa đánh giá thành công", data: review });
     } catch (error) {
       return res.status(500).json({ message: error.message });
     }
   });
 };
-
-
-
-
 
 // Xóa đánh giá (chỉ chủ sở hữu mới được xóa)
 export const deleteReview = async (req, res) => {
@@ -167,7 +183,9 @@ export const deleteReview = async (req, res) => {
 
     // Kiểm tra quyền
     if (review.userId.toString() !== req.user.id.toString()) {
-      return res.status(403).json({ message: "Bạn không có quyền xóa đánh giá này." });
+      return res
+        .status(403)
+        .json({ message: "Bạn không có quyền xóa đánh giá này." });
     }
 
     // Xóa ảnh trên Cloudinary nếu có

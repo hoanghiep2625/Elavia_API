@@ -18,6 +18,7 @@ import siteSettingsRouter from "./routers/siteSettings.js";
 import voucherRouter from "./routers/vocher.js";
 import reviewRouter from "./routers/review.js";
 import aiRoutes from "./routers/ai.js";
+import chatRouter from "./routers/chat.js";
 import "./models/user.js";
 
 dotenv.config();
@@ -70,6 +71,7 @@ app.use("/api/site-settings", siteSettingsRouter);
 app.use("/api/vouchers", voucherRouter);
 app.use("/api/reviews", reviewRouter);
 app.use("/api/ai", aiRoutes);
+app.use("/api/chat", chatRouter);
 // const PORT = 2625;
 // app.listen(PORT, async () => {
 //     console.log(`🚀 Server running at http://localhost:${PORT}`);
