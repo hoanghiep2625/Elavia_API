@@ -51,35 +51,80 @@ const processMoMoOrder = async (order) => {
     });
     console.log(`🔍 MoMo API response for ${order.orderId}:`, response.data);
 
+    const statusHistory = [];
+
     switch (response.data.resultCode) {
       case 0:
         if (!order.paymentDetails) {
+          const updateData = {
+            paymentStatus: "Đã thanh toán",
+            paymentDetails: {
+              momoTransactionId: response.data.transId,
+              responseData: response.data,
+            },
+          };
+
+          // Thêm lịch sử thay đổi
+          statusHistory.push({
+            type: "payment",
+            from: order.paymentStatus,
+            to: "Đã thanh toán",
+            updatedBy: null, // Tự động bởi hệ thống
+            updatedAt: new Date(),
+            note: "Xác nhận thanh toán MoMo thành công",
+            reason: "Hệ thống xác nhận thanh toán MoMo",
+            isAutomatic: true,
+          });
+
           await Order.updateOne(
             { orderId: order.orderId },
             {
-              $set: {
-                paymentStatus: "Đã thanh toán",
-                paymentDetails: {
-                  momoTransactionId: response.data.transId,
-                  responseData: response.data,
-                },
-              },
+              $set: updateData,
+              $push: { statusHistory: { $each: statusHistory } },
             }
           );
           console.log(`✅ MoMo order ${order.orderId} paid successfully`);
         }
         break;
       case 1005:
+        statusHistory.push({
+          type: "payment",
+          from: order.paymentStatus,
+          to: "Huỷ do quá thời gian thanh toán",
+          updatedBy: null,
+          updatedAt: new Date(),
+          note: "Hủy do quá thời gian thanh toán MoMo",
+          reason: "Quá thời gian thanh toán quy định",
+          isAutomatic: true,
+        });
+
         await Order.updateOne(
           { orderId: order.orderId },
-          { $set: { paymentStatus: "Huỷ do quá thời gian thanh toán" } }
+          {
+            $set: { paymentStatus: "Huỷ do quá thời gian thanh toán" },
+            $push: { statusHistory: { $each: statusHistory } },
+          }
         );
         console.log(`❌ MoMo order ${order.orderId} expired`);
         break;
       case 1002:
+        statusHistory.push({
+          type: "payment",
+          from: order.paymentStatus,
+          to: "Giao dịch bị từ chối do nhà phát hành",
+          updatedBy: null,
+          updatedAt: new Date(),
+          note: "Giao dịch MoMo bị từ chối",
+          reason: "Giao dịch bị từ chối bởi nhà phát hành",
+          isAutomatic: true,
+        });
+
         await Order.updateOne(
           { orderId: order.orderId },
-          { $set: { paymentStatus: "Giao dịch bị từ chối do nhà phát hành" } }
+          {
+            $set: { paymentStatus: "Giao dịch bị từ chối do nhà phát hành" },
+            $push: { statusHistory: { $each: statusHistory } },
+          }
         );
         console.log(`❌ MoMo order ${order.orderId} rejected by issuer`);
         break;
@@ -102,19 +147,36 @@ const processZaloPayOrder = async (order) => {
     });
     console.log(`🔍 ZaloPay API response for ${order.orderId}:`, response.data);
 
+    const statusHistory = [];
+
     switch (response.data.return_code) {
       case 1:
         if (!order.paymentDetails) {
+          const updateData = {
+            paymentStatus: "Đã thanh toán",
+            paymentDetails: {
+              zalopayTransactionId: response.data.zp_trans_id,
+              responseData: response.data,
+            },
+          };
+
+          // Thêm lịch sử thay đổi
+          statusHistory.push({
+            type: "payment",
+            from: order.paymentStatus,
+            to: "Đã thanh toán",
+            updatedBy: null, // Tự động bởi hệ thống
+            updatedAt: new Date(),
+            note: "Xác nhận thanh toán ZaloPay thành công",
+            reason: "Hệ thống xác nhận thanh toán ZaloPay",
+            isAutomatic: true,
+          });
+
           await Order.updateOne(
             { orderId: order.orderId },
             {
-              $set: {
-                paymentStatus: "Đã thanh toán",
-                paymentDetails: {
-                  zalopayTransactionId: response.data.zp_trans_id,
-                  responseData: response.data,
-                },
-              },
+              $set: updateData,
+              $push: { statusHistory: { $each: statusHistory } },
             }
           );
           console.log(`✅ ZaloPay order ${order.orderId} paid successfully`);
@@ -124,9 +186,23 @@ const processZaloPayOrder = async (order) => {
         console.log(`🟡 ZaloPay order ${order.orderId} still pending`);
         break;
       default:
+        statusHistory.push({
+          type: "payment",
+          from: order.paymentStatus,
+          to: "Huỷ do quá thời gian thanh toán",
+          updatedBy: null,
+          updatedAt: new Date(),
+          note: "Hủy do quá thời gian thanh toán ZaloPay",
+          reason: "Quá thời gian thanh toán quy định",
+          isAutomatic: true,
+        });
+
         await Order.updateOne(
           { orderId: order.orderId },
-          { $set: { paymentStatus: "Huỷ do quá thời gian thanh toán" } }
+          {
+            $set: { paymentStatus: "Huỷ do quá thời gian thanh toán" },
+            $push: { statusHistory: { $each: statusHistory } },
+          }
         );
         console.log(`❌ ZaloPay order ${order.orderId} expired`);
     }

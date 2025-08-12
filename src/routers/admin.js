@@ -42,6 +42,11 @@ import {
   getOrderById,
   getOrders,
   updateOrderStatus,
+  getOrderStatusHistory,
+  processRefund,
+  getRefundRequests,
+  checkRefundStatus,
+  processManualRefund,
 } from "../controllers/order.js";
 import {
   replyReview,
@@ -111,9 +116,16 @@ router.get("/variants/:id", getProductVariantById);
 router.get("/variants-product/:productId", getProductVariantsByProductId);
 
 router.get("/orders/user/:userId", getOrders);
+router.get("/orders/:orderId/status-history", getOrderStatusHistory);
 router.get("/orders/:id", getOrderById);
 router.get("/orders", getAllOrders);
 router.patch("/orders/:id", updateOrderStatus);
+
+// Routes cho hoàn tiền
+router.get("/refunds", getRefundRequests);
+router.patch("/refunds/:orderId", processRefund);
+router.post("/refunds/:orderId/manual", processManualRefund);
+router.get("/refunds/:orderId/status", checkRefundStatus);
 
 router.get("/reviews", getAllReviews);
 router.get("/reviews/:id", getReviewById);

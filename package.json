@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
-    "cronjob": "node src/controllers/cron-job-checkpayment.js"
+    "cronjob": "node src/controllers/cron-job-checkpayment.js",
+    "embedding": "node src/scripts/generateEmbedding.js"
   },
   "keywords": [],
   "author": "",

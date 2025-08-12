@@ -36,6 +36,17 @@ const PaymentDetailsSchema = new Schema(
     // Các trường theo dõi hoàn tiền khi người dùng huỷ sau khi đã thanh toán
     refundRequested: { type: Boolean, default: false },
     refundProcessed: { type: Boolean, default: false },
+    refundRequestedAt: { type: Date },
+    refundRequestedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    refundStatus: {
+      type: String,
+      enum: ["pending", "processing", "completed", "failed"],
+      default: "pending",
+    },
+    refundTransactionId: { type: String }, // ID giao dịch hoàn tiền
+    refundAmount: { type: Number }, // Số tiền hoàn
+    refundProcessedAt: { type: Date }, // Thời gian xử lý hoàn tiền
+    refundNote: { type: String }, // Ghi chú hoàn tiền
   },
   { _id: false }
 );
@@ -108,6 +119,7 @@ export const OrderSchema = new Schema(
         "Đã thanh toán", // Sau khi xác nhận thanh toán
         "Thanh toán khi nhận hàng", // Mặc định với COD
         "Huỷ do quá thời gian thanh toán", // Huỷ tự động nếu hết hạn thanh toán
+        "Giao dịch bị từ chối do nhà phát hành", // Từ chối bởi ngân hàng/nhà phát hành
         "Người mua huỷ", // Huỷ bởi người mua
         "Người bán huỷ", // Huỷ bởi người bán
       ],
@@ -154,6 +166,19 @@ export const OrderSchema = new Schema(
       processedAt: { type: Date }, // Thời gian xử lý
       processedBy: { type: Schema.Types.ObjectId, ref: "User" }, // Admin xử lý
     },
+    // Lịch sử thay đổi trạng thái
+    statusHistory: [
+      {
+        type: { type: String, enum: ["payment", "shipping"], required: true }, // Loại trạng thái
+        from: { type: String, required: true }, // Trạng thái cũ
+        to: { type: String, required: true }, // Trạng thái mới
+        updatedBy: { type: Schema.Types.ObjectId, ref: "User" }, // Người thực hiện thay đổi
+        updatedAt: { type: Date, default: Date.now }, // Thời gian thay đổi
+        note: { type: String }, // Ghi chú (nếu có)
+        reason: { type: String }, // Lý do thay đổi
+        isAutomatic: { type: Boolean, default: false }, // Thay đổi tự động hay thủ công
+      },
+    ],
   },
   { timestamps: true, versionKey: false }
 );
