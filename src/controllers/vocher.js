@@ -64,6 +64,19 @@ export const getVoucherById = async (req, res) => {
 export const createVoucher = async (req, res) => {
   try {
     const data = createVoucherSchema.parse(req.body);
+
+    // Kiểm tra trước khi tạo: code đã tồn tại chưa (case-insensitive)
+    const existingVoucher = await Voucher.findOne({
+      code: { $regex: new RegExp(`^${data.code}$`, "i") },
+    });
+
+    if (existingVoucher) {
+      return res.status(400).json({
+        message: "Mã voucher đã tồn tại",
+        error: `Mã "${data.code}" đã được sử dụng`,
+      });
+    }
+
     const voucher = new Voucher(data);
     await voucher.save();
     res.status(201).json(voucher);
@@ -84,6 +97,22 @@ export const createVoucher = async (req, res) => {
 export const updateVoucher = async (req, res) => {
   try {
     const data = updateVoucherSchema.parse(req.body);
+
+    // Nếu có update code, kiểm tra duplicate (trừ chính nó)
+    if (data.code) {
+      const existingVoucher = await Voucher.findOne({
+        code: { $regex: new RegExp(`^${data.code}$`, "i") },
+        _id: { $ne: req.params.id },
+      });
+
+      if (existingVoucher) {
+        return res.status(400).json({
+          message: "Mã voucher đã tồn tại",
+          error: `Mã "${data.code}" đã được sử dụng bởi voucher khác`,
+        });
+      }
+    }
+
     const voucher = await Voucher.findByIdAndUpdate(req.params.id, data, {
       new: true,
     });
@@ -115,12 +144,85 @@ export const deleteVoucher = async (req, res) => {
   }
 };
 
+// ✅ Lấy voucher chưa dùng của user (sắp xếp theo giảm giá nhiều nhất)
+export const getUserVouchers = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { cartTotal = 0 } = req.query;
+
+    const currentDate = new Date();
+
+    // Tìm tất cả voucher:
+    // 1. Đang hoạt động
+    // 2. Chưa hết hạn (hoặc không có hạn)
+    // 3. Còn lượt sử dụng
+    // 4. User chưa sử dụng
+    // 5. Đủ điều kiện áp dụng (minOrderValue)
+    const vouchers = await Voucher.find({
+      isActive: true,
+      $or: [
+        { expiresAt: { $gte: currentDate } },
+        { expiresAt: null },
+        { expiresAt: { $exists: false } },
+      ],
+      quantity: { $gt: 0 },
+      usedBy: { $ne: userId },
+    });
+
+    // Lọc voucher có thể áp dụng với cart total hiện tại
+    const applicableVouchers = vouchers.filter((voucher) => {
+      return Number(cartTotal) >= (voucher.minOrderValue || 0);
+    });
+
+    // Tính toán discount amount và sắp xếp theo giảm giá nhiều nhất
+    const vouchersWithDiscount = applicableVouchers.map((voucher) => {
+      let discount = 0;
+      if (voucher.type === "fixed") {
+        discount = voucher.value;
+      } else {
+        discount = (voucher.value / 100) * Number(cartTotal);
+        if (voucher.maxDiscount) {
+          discount = Math.min(discount, voucher.maxDiscount);
+        }
+      }
+      // Đảm bảo discount không vượt quá cartTotal
+      discount = Math.min(discount, Number(cartTotal));
+
+      return {
+        ...voucher.toObject(),
+        calculatedDiscount: discount,
+      };
+    });
+
+    // Sắp xếp theo discount giảm dần
+    vouchersWithDiscount.sort(
+      (a, b) => b.calculatedDiscount - a.calculatedDiscount
+    );
+
+    res.json({
+      success: true,
+      vouchers: vouchersWithDiscount,
+      total: vouchersWithDiscount.length,
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Lỗi khi lấy voucher của user",
+      error: err.message,
+    });
+  }
+};
+
 // ✅ Áp dụng mã giảm giá
 export const applyVoucher = async (req, res) => {
   try {
     const { code, userId, cartTotal } = applyVoucherSchema.parse(req.body);
 
-    const voucher = await Voucher.findOne({ code, isActive: true });
+    // Tìm voucher case-insensitive
+    const voucher = await Voucher.findOne({
+      code: { $regex: new RegExp(`^${code}$`, "i") },
+      isActive: true,
+    });
+
     if (!voucher)
       return res.status(404).json({ message: "Mã giảm giá không hợp lệ" });
 
@@ -153,6 +255,10 @@ export const applyVoucher = async (req, res) => {
         discount = Math.min(discount, voucher.maxDiscount);
       }
     }
+
+    // Đảm bảo discount không vượt quá cartTotal
+    discount = Math.min(discount, cartTotal);
+
     res.json({ success: true, discount, voucherId: voucher._id });
   } catch (err) {
     if (err.name === "ZodError") {

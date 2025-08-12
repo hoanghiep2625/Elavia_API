@@ -3,6 +3,7 @@ import {
   getVouchers,
   applyVoucher,
   getVoucherById,
+  getUserVouchers,
 } from "../controllers/vocher.js";
 import { checkAuth } from "../middlewares/checkAuth.js";
 
@@ -12,6 +13,7 @@ router.use(checkAuth);
 
 router.get("/", getVouchers);
 router.get("/vouchers/:id", getVoucherById);
+router.get("/user/:userId", getUserVouchers);
 router.post("/apply", applyVoucher);
 
 export default router;
