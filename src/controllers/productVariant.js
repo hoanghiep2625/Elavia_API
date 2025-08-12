@@ -763,31 +763,9 @@ export const searchProducts = async (req, res) => {
       status: true,
     };
 
-    // Price range fallback
-    if (
-      Array.isArray(priceRange) &&
-      priceRange.length === 2 &&
-      typeof priceRange[0] === "number" &&
-      typeof priceRange[1] === "number"
-    ) {
-      query.price = { $gte: priceRange[0], $lte: priceRange[1] };
-    } else {
-      query.price = { $gte: 0, $lte: 10000000 }; // fallback nếu không hợp lệ
-    }
-
     // Màu sắc
     if (color && typeof color === "string" && color.trim() !== "") {
       query["color.baseColor"] = color;
-    }
-
-    // Size + còn hàng
-    if (Array.isArray(sizes) && sizes.length > 0) {
-      query.sizes = {
-        $elemMatch: {
-          size: { $in: sizes },
-          stock: { $gt: 0 },
-        },
-      };
     }
 
     // Keyword: tìm theo tên sản phẩm
@@ -799,6 +777,7 @@ export const searchProducts = async (req, res) => {
       query.productId = { $in: productIds };
     }
 
+    // Lọc theo thuộc tính (attributes)
     if (
       typeof attributes === "object" &&
       Object.keys(attributes).some(
@@ -815,6 +794,30 @@ export const searchProducts = async (req, res) => {
         query.$and = [...(query.$and || []), ...attrFilters];
       }
     }
+
+    // Xử lý Size + Price Range + Stock cùng lúc trong sizes array
+    const sizesConditions = [];
+
+    // Điều kiện base: còn hàng
+    const baseCondition = { stock: { $gt: 0 } };
+
+    // Nếu có filter theo size cụ thể
+    if (Array.isArray(sizes) && sizes.length > 0) {
+      baseCondition.size = { $in: sizes };
+    }
+
+    // Nếu có filter theo price range
+    if (
+      Array.isArray(priceRange) &&
+      priceRange.length === 2 &&
+      typeof priceRange[0] === "number" &&
+      typeof priceRange[1] === "number"
+    ) {
+      baseCondition.price = { $gte: priceRange[0], $lte: priceRange[1] };
+    }
+
+    // Áp dụng điều kiện cho sizes array
+    query.sizes = { $elemMatch: baseCondition };
 
     // Query sản phẩm variant
     const variants = await ProductVariant.paginate(query, {
@@ -876,31 +879,30 @@ export const getProductVariantsByCategory = async (req, res) => {
     // Query lọc
     const query = { productId: { $in: productIds }, status: true };
 
-    // Lọc theo giá
+    // Xử lý Size + Price Range + Stock cùng lúc trong sizes array
+    const baseCondition = { stock: { $gt: 0 } };
+
+    // Nếu có filter theo size cụ thể
+    if (Array.isArray(sizes) && sizes.length > 0) {
+      baseCondition.size = { $in: sizes };
+    }
+
+    // Nếu có filter theo price range
     if (
       Array.isArray(priceRange) &&
       priceRange.length === 2 &&
       typeof priceRange[0] === "number" &&
       typeof priceRange[1] === "number"
     ) {
-      query.price = { $gte: priceRange[0], $lte: priceRange[1] };
-    } else {
-      query.price = { $gte: 0, $lte: 10000000 };
+      baseCondition.price = { $gte: priceRange[0], $lte: priceRange[1] };
     }
+
+    // Áp dụng điều kiện cho sizes array
+    query.sizes = { $elemMatch: baseCondition };
 
     // Lọc theo màu
     if (color && typeof color === "string" && color.trim() !== "") {
       query["color.baseColor"] = color;
-    }
-
-    // Lọc theo size + còn hàng
-    if (Array.isArray(sizes) && sizes.length > 0) {
-      query.sizes = {
-        $elemMatch: {
-          size: { $in: sizes },
-          stock: { $gt: 0 },
-        },
-      };
     }
 
     // Lọc theo thuộc tính (attributes)
@@ -923,10 +925,12 @@ export const getProductVariantsByCategory = async (req, res) => {
 
     // Xử lý sort động
     let sort = { createdAt: -1 }; // mặc định mới nhất
-    if (sortBy === "price-asc") sort = { price: 1 };
-    if (sortBy === "price-desc") sort = { price: -1 };
+    // Lưu ý: không thể sort theo price trực tiếp vì price nằm trong sizes array
+    // Cần sử dụng aggregation pipeline hoặc sort sau khi query
+    if (sortBy === "price-asc") sort = { createdAt: -1 }; // fallback to createdAt
+    if (sortBy === "price-desc") sort = { createdAt: -1 }; // fallback to createdAt
     if (sortBy === "newest") sort = { createdAt: -1 };
-    if (sortBy === "popular") sort = { sold: -1 };
+    if (sortBy === "popular") sort = { createdAt: -1 }; // nếu có field sold trong future
     // Query sản phẩm variant
     const variants = await ProductVariant.paginate(query, {
       page,
@@ -963,6 +967,71 @@ const getAllChildCategoryIds = (allCategories, rootId) => {
     }
   }
   return result;
+};
+
+// Helper function để tạo query filter cho model ProductVariant mới
+const buildProductVariantQuery = (options = {}) => {
+  const {
+    productIds = [],
+    sizes = [],
+    color = "",
+    priceRange = [],
+    attributes = {},
+    status = true,
+  } = options;
+
+  const query = { status };
+
+  // Lọc theo productIds nếu có
+  if (Array.isArray(productIds) && productIds.length > 0) {
+    query.productId = { $in: productIds };
+  }
+
+  // Xử lý Size + Price Range + Stock cùng lúc trong sizes array
+  const baseCondition = { stock: { $gt: 0 } };
+
+  // Nếu có filter theo size cụ thể
+  if (Array.isArray(sizes) && sizes.length > 0) {
+    baseCondition.size = { $in: sizes };
+  }
+
+  // Nếu có filter theo price range
+  if (
+    Array.isArray(priceRange) &&
+    priceRange.length === 2 &&
+    typeof priceRange[0] === "number" &&
+    typeof priceRange[1] === "number"
+  ) {
+    baseCondition.price = { $gte: priceRange[0], $lte: priceRange[1] };
+  }
+
+  // Áp dụng điều kiện cho sizes array
+  query.sizes = { $elemMatch: baseCondition };
+
+  // Lọc theo màu
+  if (color && typeof color === "string" && color.trim() !== "") {
+    query["color.baseColor"] = color;
+  }
+
+  // Lọc theo thuộc tính (attributes)
+  if (
+    typeof attributes === "object" &&
+    Object.keys(attributes).some(
+      (k) => Array.isArray(attributes[k]) && attributes[k].length > 0
+    )
+  ) {
+    const attrFilters = Object.entries(attributes)
+      .filter(([_, values]) => Array.isArray(values) && values.length > 0)
+      .map(([attribute, values]) => ({
+        attributes: { $elemMatch: { attribute, value: { $in: values } } },
+      }));
+
+    if (attrFilters.length > 0) {
+      query.$and = [...(query.$and || []), ...attrFilters];
+    }
+  }
+
+  return query;
 };
 
 // HÀM NÂNG CAO CHO NEW ARRIVAL WOMEN
@@ -1024,10 +1093,7 @@ export const getNewArrivalWomen = async (req, res) => {
     }).select("_id");
     const productIds = products.map((p) => p._id);
 
-    // 4. Tạo query cho ProductVariant
-    const query = { productId: { $in: productIds }, status: true };
-
-    // 5. Lọc theo giá (áp dụng vào sizes.price)
+    // 4. Parse parameters
     let priceArr = [];
     if (priceRange) {
       if (Array.isArray(priceRange)) {
@@ -1052,38 +1118,14 @@ export const getNewArrivalWomen = async (req, res) => {
         typeof priceArr[1] === "number"
       )
     ) {
-      priceArr = [0, 10000000]; // mặc định
+      priceArr = [0, 10000000];
     }
 
-    // 6. Lọc theo màu
-    if (color && typeof color === "string" && color.trim() !== "") {
-      query["color.baseColor"] = color;
-    }
-
-    // 7. Lọc theo size + còn hàng + giá
     let sizesArr = [];
     if (sizes) {
       sizesArr = typeof sizes === "string" ? JSON.parse(sizes) : sizes;
     }
 
-    if (Array.isArray(sizesArr) && sizesArr.length > 0) {
-      query.sizes = {
-        $elemMatch: {
-          size: { $in: sizesArr },
-          stock: { $gt: 0 },
-          price: { $gte: priceArr[0], $lte: priceArr[1] },
-        },
-      };
-    } else {
-      // Nếu không lọc size thì chỉ lọc giá
-      query.sizes = {
-        $elemMatch: {
-          price: { $gte: priceArr[0], $lte: priceArr[1] },
-        },
-      };
-    }
-
-    // 8. Lọc theo thuộc tính
     let attrObj = {};
     if (attributes) {
       try {
@@ -1092,23 +1134,16 @@ export const getNewArrivalWomen = async (req, res) => {
       } catch {
         attrObj = {};
       }
-      if (
-        typeof attrObj === "object" &&
-        Object.keys(attrObj).some(
-          (k) => Array.isArray(attrObj[k]) && attrObj[k].length > 0
-        )
-      ) {
-        const attrFilters = Object.entries(attrObj)
-          .filter(([_, values]) => Array.isArray(values) && values.length > 0)
-          .map(([attribute, values]) => ({
-            attributes: { $elemMatch: { attribute, value: { $in: values } } },
-          }));
-
-        if (attrFilters.length > 0) {
-          query.$and = [...(query.$and || []), ...attrFilters];
-        }
-      }
     }
+
+    // 5. Tạo query cho ProductVariant
+    const query = buildProductVariantQuery({
+      productIds,
+      sizes: sizesArr,
+      color,
+      priceRange: priceArr,
+      attributes: attrObj,
+    });
 
     // 9. Xử lý sort
     let sort = { createdAt: -1 };
@@ -1192,9 +1227,7 @@ export const getNewArrivalMen = async (req, res) => {
     }).select("_id");
     const productIds = products.map((p) => p._id);
 
-    const query = { productId: { $in: productIds }, status: true };
-
-    // Lọc theo giá
+    // Parse parameters
     let priceArr = [];
     if (priceRange) {
       if (Array.isArray(priceRange)) {
@@ -1214,36 +1247,21 @@ export const getNewArrivalMen = async (req, res) => {
       }
     }
     if (
-      Array.isArray(priceArr) &&
-      priceArr.length === 2 &&
-      typeof priceArr[0] === "number" &&
-      typeof priceArr[1] === "number"
+      !(
+        Array.isArray(priceArr) &&
+        priceArr.length === 2 &&
+        typeof priceArr[0] === "number" &&
+        typeof priceArr[1] === "number"
+      )
     ) {
-      query.price = { $gte: priceArr[0], $lte: priceArr[1] };
-    } else {
-      query.price = { $gte: 0, $lte: 10000000 };
+      priceArr = [0, 10000000];
     }
 
-    // Lọc theo màu
-    if (color && typeof color === "string" && color.trim() !== "") {
-      query["color.baseColor"] = color;
-    }
-
-    // Lọc theo size + còn hàng
     let sizesArr = [];
     if (sizes) {
       sizesArr = typeof sizes === "string" ? JSON.parse(sizes) : sizes;
     }
-    if (Array.isArray(sizesArr) && sizesArr.length > 0) {
-      query.sizes = {
-        $elemMatch: {
-          size: { $in: sizesArr },
-          stock: { $gt: 0 },
-        },
-      };
-    }
 
-    // Lọc theo thuộc tính (attributes)
     let attrObj = {};
     if (attributes) {
       try {
@@ -1252,23 +1270,16 @@ export const getNewArrivalMen = async (req, res) => {
       } catch {
         attrObj = {};
       }
-      if (
-        typeof attrObj === "object" &&
-        Object.keys(attrObj).some(
-          (k) => Array.isArray(attrObj[k]) && attrObj[k].length > 0
-        )
-      ) {
-        const attrFilters = Object.entries(attrObj)
-          .filter(([_, values]) => Array.isArray(values) && values.length > 0)
-          .map(([attribute, values]) => ({
-            attributes: { $elemMatch: { attribute, value: { $in: values } } },
-          }));
-
-        if (attrFilters.length > 0) {
-          query.$and = [...(query.$and || []), ...attrFilters];
-        }
-      }
     }
+
+    // Tạo query với helper function
+    const query = buildProductVariantQuery({
+      productIds,
+      sizes: sizesArr,
+      color,
+      priceRange: priceArr,
+      attributes: attrObj,
+    });
 
     // Xử lý sort động
     let sort = { createdAt: -1 };
@@ -1361,20 +1372,15 @@ export const getSpringSummerCollectionWomen = async (req, res) => {
     }).select("_id");
     const productIds = products.map((p) => p._id);
 
-    // 4. Query lọc nâng cao
-    const query = { productId: { $in: productIds }, status: true };
-
-    // Lọc theo giá
+    // 4. Parse parameters and create query with helper function
     let priceArr = [];
     if (priceRange) {
       if (Array.isArray(priceRange)) {
         priceArr = priceRange.map(Number);
       } else if (typeof priceRange === "string") {
-        // Nếu là chuỗi dạng "0,10000000"
         if (priceRange.includes(",")) {
           priceArr = priceRange.split(",").map(Number);
         } else {
-          // Nếu là chuỗi JSON
           try {
             priceArr = JSON.parse(priceRange);
           } catch {
@@ -1384,36 +1390,21 @@ export const getSpringSummerCollectionWomen = async (req, res) => {
       }
     }
     if (
-      Array.isArray(priceArr) &&
-      priceArr.length === 2 &&
-      typeof priceArr[0] === "number" &&
-      typeof priceArr[1] === "number"
+      !(
+        Array.isArray(priceArr) &&
+        priceArr.length === 2 &&
+        typeof priceArr[0] === "number" &&
+        typeof priceArr[1] === "number"
+      )
     ) {
-      query.price = { $gte: priceArr[0], $lte: priceArr[1] };
-    } else {
-      query.price = { $gte: 0, $lte: 10000000 };
+      priceArr = [0, 10000000];
     }
 
-    // Lọc theo màu
-    if (color && typeof color === "string" && color.trim() !== "") {
-      query["color.baseColor"] = color;
-    }
-
-    // Lọc theo size + còn hàng
     let sizesArr = [];
     if (sizes) {
       sizesArr = typeof sizes === "string" ? JSON.parse(sizes) : sizes;
     }
-    if (Array.isArray(sizesArr) && sizesArr.length > 0) {
-      query.sizes = {
-        $elemMatch: {
-          size: { $in: sizesArr },
-          stock: { $gt: 0 },
-        },
-      };
-    }
 
-    // Lọc theo thuộc tính (attributes)
     let attrObj = {};
     if (attributes) {
       try {
@@ -1422,23 +1413,15 @@ export const getSpringSummerCollectionWomen = async (req, res) => {
       } catch {
         attrObj = {};
       }
-      if (
-        typeof attrObj === "object" &&
-        Object.keys(attrObj).some(
-          (k) => Array.isArray(attrObj[k]) && attrObj[k].length > 0
-        )
-      ) {
-        const attrFilters = Object.entries(attrObj)
-          .filter(([_, values]) => Array.isArray(values) && values.length > 0)
-          .map(([attribute, values]) => ({
-            attributes: { $elemMatch: { attribute, value: { $in: values } } },
-          }));
-
-        if (attrFilters.length > 0) {
-          query.$and = [...(query.$and || []), ...attrFilters];
-        }
-      }
     }
+
+    const query = buildProductVariantQuery({
+      productIds,
+      sizes: sizesArr,
+      color,
+      priceRange: priceArr,
+      attributes: attrObj,
+    });
 
     // Xử lý sort động
     let sort = { createdAt: -1 };
@@ -1525,20 +1508,15 @@ export const getSpringSummerCollectionMen = async (req, res) => {
     }).select("_id");
     const productIds = products.map((p) => p._id);
 
-    // 4. Query lọc nâng cao
-    const query = { productId: { $in: productIds }, status: true };
-
-    // Lọc theo giá
+    // 4. Parse parameters and create query with helper function
     let priceArr = [];
     if (priceRange) {
       if (Array.isArray(priceRange)) {
         priceArr = priceRange.map(Number);
       } else if (typeof priceRange === "string") {
-        // Nếu là chuỗi dạng "0,10000000"
         if (priceRange.includes(",")) {
           priceArr = priceRange.split(",").map(Number);
         } else {
-          // Nếu là chuỗi JSON
           try {
             priceArr = JSON.parse(priceRange);
           } catch {
@@ -1548,36 +1526,21 @@ export const getSpringSummerCollectionMen = async (req, res) => {
       }
     }
     if (
-      Array.isArray(priceArr) &&
-      priceArr.length === 2 &&
-      typeof priceArr[0] === "number" &&
-      typeof priceArr[1] === "number"
+      !(
+        Array.isArray(priceArr) &&
+        priceArr.length === 2 &&
+        typeof priceArr[0] === "number" &&
+        typeof priceArr[1] === "number"
+      )
     ) {
-      query.price = { $gte: priceArr[0], $lte: priceArr[1] };
-    } else {
-      query.price = { $gte: 0, $lte: 10000000 };
+      priceArr = [0, 10000000];
     }
 
-    // Lọc theo màu
-    if (color && typeof color === "string" && color.trim() !== "") {
-      query["color.baseColor"] = color;
-    }
-
-    // Lọc theo size + còn hàng
     let sizesArr = [];
     if (sizes) {
       sizesArr = typeof sizes === "string" ? JSON.parse(sizes) : sizes;
     }
-    if (Array.isArray(sizesArr) && sizesArr.length > 0) {
-      query.sizes = {
-        $elemMatch: {
-          size: { $in: sizesArr },
-          stock: { $gt: 0 },
-        },
-      };
-    }
 
-    // Lọc theo thuộc tính (attributes)
     let attrObj = {};
     if (attributes) {
       try {
@@ -1586,23 +1549,15 @@ export const getSpringSummerCollectionMen = async (req, res) => {
       } catch {
         attrObj = {};
       }
-      if (
-        typeof attrObj === "object" &&
-        Object.keys(attrObj).some(
-          (k) => Array.isArray(attrObj[k]) && attrObj[k].length > 0
-        )
-      ) {
-        const attrFilters = Object.entries(attrObj)
-          .filter(([_, values]) => Array.isArray(values) && values.length > 0)
-          .map(([attribute, values]) => ({
-            attributes: { $elemMatch: { attribute, value: { $in: values } } },
-          }));
-
-        if (attrFilters.length > 0) {
-          query.$and = [...(query.$and || []), ...attrFilters];
-        }
-      }
     }
+
+    const query = buildProductVariantQuery({
+      productIds,
+      sizes: sizesArr,
+      color,
+      priceRange: priceArr,
+      attributes: attrObj,
+    });
 
     // Xử lý sort động
     let sort = { createdAt: -1 };
