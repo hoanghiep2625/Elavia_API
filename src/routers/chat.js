@@ -7,6 +7,7 @@ import {
   getUserConversations,
   uploadChatImage,
   getChatProducts,
+  updateConversationAI,
 } from "../controllers/chat.js";
 import {
   getChatStats,
@@ -41,6 +42,9 @@ router.get("/conversation/:conversationId/messages", checkAuth, getMessages);
 
 // Lấy danh sách conversations của user
 router.get("/conversations", checkAuth, getUserConversations);
+
+// Toggle AI advisor cho conversation
+router.put("/conversation/:conversationId/ai", checkAuth, updateConversationAI);
 
 // ============ ADMIN ROUTES ============
 // Dashboard thống kê
