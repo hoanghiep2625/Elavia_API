@@ -47,6 +47,15 @@ const conversationSchema = new mongoose.Schema(
       ip: String,
       page: String,
     },
+    aiEnabled: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    notes: {
+      type: String,
+      default: "",
+    },
   },
   { timestamps: true, versionKey: false }
 );

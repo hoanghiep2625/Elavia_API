@@ -4,6 +4,9 @@ import upload from "../middlewares/multer.js";
 import cloudinary from "../config/cloudinary.js";
 import jwt from "jsonwebtoken";
 import { checkCommentWithGemini } from "../scripts/geminiModeration.js";
+import { reviewSuggestionPrompt } from "../scripts/geminiReview.js";
+import mongoose from "mongoose";
+import axios from "axios";
 // Hàm upload 1 ảnh lên Cloudinary
 const uploadImageToCloudinary = async (file) => {
   return new Promise((resolve, reject) => {
@@ -44,7 +47,7 @@ export const createReview = (req, res) => {
         : [];
       const status = await checkCommentWithGemini(comment);
 
-      // Tạo review
+      // Tạo review với updateCount = 0
       const review = await Review.create({
         userId: req.user.id,
         orderId,
@@ -53,6 +56,7 @@ export const createReview = (req, res) => {
         comment,
         images,
         status,
+        updatedCount: 0, // Đảm bảo bắt đầu từ 0
       });
 
       // Cập nhật reviewed = true
@@ -178,7 +182,15 @@ export const updateReview = (req, res) => {
         review.images.push(...uploadedImages);
       }
 
-      review.updatedCount += 1;
+      // Chỉ tăng updateCount khi có thay đổi thực sự
+      const hasChanges = contentChanged || 
+                        (req.files && req.files.length > 0) || 
+                        (removedImages && removedImages.length > 0);
+                        
+      if (hasChanges) {
+        review.updatedCount += 1;
+      }
+      
       await review.save();
 
       return res
@@ -419,7 +431,8 @@ export const updateReply = async (req, res) => {
       review.reply.repliedBy = req.user._id;
     }
 
-    review.updatedCount = (review.updatedCount || 0) + 1;
+    // Không tăng updatedCount khi admin phản hồi
+    // review.updatedCount = (review.updatedCount || 0) + 1;
 
     await review.save();
 
@@ -523,5 +536,72 @@ export const updateReviewStatus = async (req, res) => {
       .json({ message: "Cập nhật trạng thái thành công", data: review });
   } catch (err) {
     return res.status(500).json({ message: err.message });
+  }
+};
+
+
+export const getReviewSuggestion = async (req, res) => {
+  try {
+    const { orderId, itemIndex = 0 } = req.query;
+
+    // 1️⃣ Validate orderId
+    if (!orderId) {
+      return res.status(400).json({ message: "Thiếu orderId" });
+    }
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({ message: "orderId không hợp lệ" });
+    }
+
+    // 2️⃣ Lấy order + populate variant
+    const order = await Order.findById(orderId).populate(
+      "items.productVariantId"
+    );
+    if (!order) {
+      return res.status(404).json({ message: "Không tìm thấy đơn hàng" });
+    }
+
+    // 3️⃣ Lấy item theo index
+    const orderItem = order.items[itemIndex];
+    if (!orderItem) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy sản phẩm trong đơn" });
+    }
+
+    // 4️⃣ Lấy variant (đã populate)
+    const variant = orderItem.productVariantId;
+    if (!variant) {
+      return res.status(404).json({ message: "Không tìm thấy productVariant" });
+    }
+
+    // 5️⃣ Lấy thông tin sản phẩm
+    const productName = variant.product?.name || variant.name || "Sản phẩm";
+    const color = orderItem.color || variant.color || "";
+    const size = orderItem.size || variant.size || "";
+
+    // 6️⃣ Tạo prompt
+    const prompt = reviewSuggestionPrompt(productName, color, size);
+
+    // 7️⃣ Gọi Gemini API
+    const aiResponse = await axios.post(
+      "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent",
+      {
+        contents: [{ parts: [{ text: prompt }] }],
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": process.env.GEMINI_API_KEY,
+        },
+      }
+    );
+
+    const suggestion =
+      aiResponse.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+
+    res.json({ suggestion });
+  } catch (error) {
+    console.error("Gemini AI Error:", error.response?.data || error.message);
+    res.status(500).json({ message: "Lỗi server khi tạo gợi ý đánh giá" });
   }
 };

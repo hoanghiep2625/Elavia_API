@@ -10,7 +10,7 @@ const productVariantSchema = new mongoose.Schema(
       index: true,
     },
     embedding: { type: [Number], default: [] },
-    sku: { type: String, required: true, index: true }, // SKU chung
+    sku: { type: String, required: true },
     color: {
       baseColor: { type: String, required: true, index: true },
       actualColor: { type: String, required: true },
@@ -46,7 +46,7 @@ const productVariantSchema = new mongoose.Schema(
           required: true,
         },
         stock: { type: Number, required: true, min: 0, index: true },
-        price: { type: Number, required: true, index: true }, // Giá riêng cho size này
+        price: { type: Number, required: true, index: true },
       },
     ],
     status: {
