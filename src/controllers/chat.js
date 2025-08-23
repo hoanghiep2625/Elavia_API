@@ -6,303 +6,938 @@ import Product from "../models/product.js";
 import ProductVariant from "../models/productVariant.js";
 import Category from "../models/categories.js";
 import mongoose from "mongoose";
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// AI Response Generator - Simple rule-based AI
+// Khởi tạo Gemini AI
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+// AI Response Generator với Gemini AI
 const generateAIResponse = async (userMessage, conversation) => {
-  const message = userMessage.toLowerCase();
+  try {
+    console.log("🤖 AI Processing message:", userMessage);
 
-  // 1. Giao hàng & phí ship
-  if (
-    message.includes("ship") ||
-    message.includes("giao hàng") ||
-    message.includes("phí vận chuyển")
-  ) {
-    return {
-      type: "text",
-      content: "Shop giao hàng toàn quốc trong 2–5 ngày. Miễn phí ship cho đơn từ 500k bạn nhé!",
-    };
-  }
+    // 1. Phân tích intent của user bằng Gemini AI
+    const intentAnalysis = await analyzeUserIntent(userMessage);
+    console.log("🎯 AI Intent analysis:", intentAnalysis);
 
-  // 2. Chính sách đổi trả
-  if (
-    message.includes("đổi") ||
-    message.includes("trả") ||
-    message.includes("hoàn hàng")
-  ) {
-    return {
-      type: "text",
-      content: "Bạn có thể đổi trả trong vòng 7 ngày kể từ ngày nhận hàng, miễn phí đổi size lần đầu.",
-    };
-  }
+    // 2. Nếu có intent tìm sản phẩm, tìm sản phẩm phù hợp
+    if (
+      intentAnalysis.intent === "product_search" ||
+      intentAnalysis.intent === "product_recommendation"
+    ) {
+      const products = await getAIRecommendedProducts(
+        intentAnalysis,
+        userMessage
+      );
 
-  // 3. Tư vấn size
-  if (
-    message.includes("size") ||
-    message.includes("mặc vừa không") ||
-    message.includes("cao") ||
-    message.includes("nặng")
-  ) {
-    return {
-      type: "text",
-      content: "Bạn vui lòng cho mình chiều cao và cân nặng, shop sẽ tư vấn size phù hợp. Ngoài ra có bảng size chi tiết trên mỗi sản phẩm.",
-    };
-  }
-
-  // 4. Khuyến mãi / voucher
-  if (
-    message.includes("giảm giá") ||
-    message.includes("khuyến mãi") ||
-    message.includes("voucher") ||
-    message.includes("mã")
-  ) {
-    return {
-      type: "text",
-      content: "Hiện tại shop có mã GIAM10 giảm 10% cho đơn từ 500k. Bạn muốn mình áp dụng cho giỏ hàng của bạn không?",
-    };
-  }
-
-  // 5. Sản phẩm hot / mix đồ
-  if (
-    message.includes("hot") ||
-    message.includes("trend") ||
-    message.includes("mẫu mới") ||
-    message.includes("phối")
-  ) {
-    return {
-      type: "text",
-      content: "Áo sơ mi trắng và quần jeans xanh đang là item hot. Bạn có thể mix cùng giày sneaker để thêm năng động.",
-    };
-  }
-
-  // 6. Chất liệu & giặt ủi
-  if (
-    message.includes("chất liệu") ||
-    message.includes("vải") ||
-    message.includes("bền không") ||
-    message.includes("giặt")
-  ) {
-    return {
-      type: "text",
-      content: "Sản phẩm được làm từ cotton thoáng mát, dễ giặt, giữ form tốt sau nhiều lần sử dụng.",
-    };
-  }
-
-  // 7. Kiểm tra tồn kho
-  if (
-    message.includes("còn hàng") ||
-    message.includes("hết hàng") ||
-    message.includes("size s") ||
-    message.includes("size m") ||
-    message.includes("size l")
-  ) {
-    return {
-      type: "text",
-      content: "Bạn vui lòng cho mình tên sản phẩm, shop sẽ kiểm tra tồn kho và báo lại ngay!",
-    };
-  }
-
-  // 8. Hàng lỗi / bảo hành
-  if (
-    message.includes("lỗi") ||
-    message.includes("rách") ||
-    message.includes("bung chỉ") ||
-    message.includes("hỏng")
-  ) {
-    return {
-      type: "text",
-      content: "Nếu sản phẩm lỗi do nhà sản xuất, shop sẽ hỗ trợ đổi mới trong vòng 7 ngày kể từ khi nhận hàng.",
-    };
-  }
-
-  // 9. Câu chào cơ bản
-  if (
-    message.includes("hello") ||
-    message.includes("xin chào") ||
-    message.includes("hi") ||
-    message.includes("chào shop")
-  ) {
-    return {
-      type: "text",
-      content: "Xin chào 👋! Mình có thể giúp bạn tìm sản phẩm hoặc tư vấn size không?",
-    };
-  }
-  // Câu chào hỏi
-  if (
-    message.includes("xin chào") ||
-    message.includes("hello") ||
-    message.includes("hi")
-  ) {
-    return {
-      type: "text",
-      content:
-        "Xin chào! Tôi là AI tư vấn của Elavia. Tôi có thể giúp bạn tìm kiếm sản phẩm, trả lời các câu hỏi về chính sách và hỗ trợ mua sắm. Bạn cần tôi giúp gì?",
-    };
-  }
-
-  // Tìm kiếm sản phẩm với logic cải tiến
-  if (
-    message.includes("tìm") ||
-    message.includes("sản phẩm") ||
-    message.includes("áo") ||
-    message.includes("quần") ||
-    message.includes("váy") ||
-    message.includes("đầm") ||
-    message.includes("sơ mi") ||
-    message.includes("thun") ||
-    message.includes("khoác") ||
-    message.includes("jean") ||
-    message.includes("short") ||
-    message.includes("nam") ||
-    message.includes("nữ") ||
-    message.includes("unisex") ||
-    message.includes("muốn xem")
-  ) {
-    const products = await getRecommendedProducts(message);
-    if (products.length > 0) {
-      const product = products[0];
-
-      // Phân tích size từ thông số cơ thể nếu có
-      const recommendedSize = getRecommendedSizeFromMessage(message);
-
-      // Chọn size phù hợp và có stock
-      let selectedSize =
-        product.sizes.find((s) => s.stock > 0) || product.sizes[0];
-      if (recommendedSize) {
-        // Tìm size khớp với gợi ý và có stock
-        const matchingSize = product.sizes.find(
-          (s) => s.size === recommendedSize && s.stock > 0
+      if (products.length > 0) {
+        // Tạo response kết hợp text + sản phẩm
+        const aiResponse = await generateProductResponse(
+          intentAnalysis,
+          products[0],
+          userMessage
         );
-        if (matchingSize) {
-          selectedSize = matchingSize;
-        } else {
-          // Tìm size gần nhất có stock
-          const availableSizes = product.sizes.filter((s) => s.stock > 0);
-          if (availableSizes.length > 0) {
-            const nearestSize = findNearestSize(
-              recommendedSize,
-              availableSizes.map((s) => s.size)
-            );
-            if (nearestSize) {
-              selectedSize =
-                availableSizes.find((s) => s.size === nearestSize) ||
-                availableSizes[0];
-            }
+
+        return {
+          type: "mixed", // Loại response mới: text + product
+          content: JSON.stringify({
+            text: aiResponse.text,
+            product: aiResponse.product,
+          }),
+        };
+      } else {
+        // Không tìm thấy sản phẩm, tạo response chỉ có text
+        const response = await generateTextResponse(
+          userMessage,
+          intentAnalysis
+        );
+        return {
+          type: "text",
+          content: response,
+        };
+      }
+    }
+
+    // 3. Với các intent khác (FAQ, size advice, etc.)
+    const response = await generateTextResponse(userMessage, intentAnalysis);
+    return {
+      type: "text",
+      content: response,
+    };
+  } catch (error) {
+    console.error("❌ AI Error:", error);
+    // Fallback về rule-based cũ nếu AI lỗi
+    return await generateFallbackResponse(userMessage);
+  }
+};
+
+// Phân tích intent của user bằng Gemini AI
+const analyzeUserIntent = async (userMessage) => {
+  try {
+    const prompt = `
+Bạn là AI phân tích intent cho hệ thống tư vấn bán hàng thời trang Việt Nam.
+Phân tích tin nhắn sau và trả về JSON với format chính xác:
+
+Tin nhắn: "${userMessage}"
+
+QUAN TRỌNG - Phân tích đúng người nhận sản phẩm:
+Khi user nói "cho người yêu tôi, tôi là nam" → người nhận là NGƯỜI YÊU (nữ), không phải user (nam)
+
+LOGIC PHÂN TÍCH GENDER:
+1. "cho người yêu tôi" + user là nam → gender: "nữ"
+2. "cho người yêu tôi" + user là nữ → gender: "nam"  
+3. "cho bạn gái" → gender: "nữ"
+4. "cho bạn trai" → gender: "nam"
+5. "cho vợ" → gender: "nữ" 
+6. "cho chồng" → gender: "nam"
+7. "cho mẹ/chị/em gái" → gender: "nữ"
+8. "cho bố/anh/em trai" → gender: "nam"
+9. "tôi muốn áo sơ mi nam" → gender: "nam"
+
+Trả về JSON với format:
+{
+  "intent": "product_search|product_recommendation|faq|size_advice|greeting|complaint|other",
+  "category": "áo sơ mi|áo thun|quần jean|váy|đầm|áo khoác|quần short|crop top|tank top|null",
+  "gender": "nam|nữ|unisex|null", 
+  "keywords": ["keyword1", "keyword2"],
+  "hasPromotion": true/false,
+  "bodyMeasurements": {
+    "weight": number|null,
+    "height": number|null
+  },
+  "targetGender": "nam|nữ|unisex|null",
+  "buyerInfo": "mua cho bản thân|mua cho người khác",
+  "colorPreference": "trắng|đen|đỏ|xanh|null",
+  "price": { "min": number|null, "max": number|null }
+}
+
+PHÂN TÍCH KHOẢNG GIÁ:
+- "trên 500k", "từ 500k", "500k trở lên" → price: {"min": 500000, "max": null}
+- "dưới 300k", "dưới 300 nghìn" → price: {"min": null, "max": 300000}
+- "từ 200k đến 500k", "200-500k" → price: {"min": 200000, "max": 500000}
+- "khoảng 400k", "tầm 400k" → price: {"min": 350000, "max": 450000}
+- "giá rẻ" → price: {"min": null, "max": 200000}
+- "cao cấp", "đắt tiền" → price: {"min": 500000, "max": null}
+
+VÍ DỤ PHÂN TÍCH CHÍNH XÁC:
+- "áo sơ mi trắng nữ trên 600k" 
+  → gender: "nữ", colorPreference: "trắng", price: {"min": 600000, "max": null}
+- "tôi muốn áo thun dưới 200k"
+  → gender: "unisex", price: {"min": null, "max": 200000}
+- "áo khoác từ 300k đến 800k"
+  → price: {"min": 300000, "max": 800000}
+
+Category mapping:
+- crop top: "croptop", "crop top", "crop-top", "áo ngắn", "áo bó"
+- tank top: "tanktop", "tank top", "tank-top", "áo ba lỗ", "áo 2 dây"
+- áo sơ mi: "sơ mi", "shirt"
+- áo thun: "thun", "t-shirt", "tshirt" (KHÔNG bao gồm croptop)
+- quần jean: "jean", "jeans"
+- váy: "váy", "skirt", "dress"
+- đầm: "đầm", "dress"
+- áo khoác: "khoác", "jacket"
+- quần short: "short", "shorts"
+
+QUAN TRỌNG: 
+- gender và targetGender phải giống nhau và là giới tính của người SẼ DÙNG sản phẩm
+- Phân tích context "cho ai" để xác định đúng gender
+- Chỉ trả về JSON, không thêm text khác!
+`;
+
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+    const text = response.text();
+    const regex = /(\d+)\s*(k|nghìn|ngàn|tr|triệu|trieu)?/g;
+
+    console.log("🤖 Gemini raw response:", text);
+
+    // Parse JSON response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const analysis = JSON.parse(jsonMatch[0]);
+
+      // Đảm bảo targetGender luôn giống gender
+      if (!analysis.targetGender) {
+        analysis.targetGender = analysis.gender;
+      }
+
+      // Thêm colorPreference nếu chưa có
+      if (!analysis.colorPreference) {
+        const colorMap = {
+          trắng: "white",
+          đen: "black",
+          đỏ: "red",
+          xanh: "blue",
+          vàng: "yellow",
+          hồng: "pink",
+          nâu: "brown",
+          xám: "gray",
+          tím: "purple",
+        };
+        const messageText = userMessage.toLowerCase();
+        for (const [vnColor, enColor] of Object.entries(colorMap)) {
+          if (messageText.includes(vnColor)) {
+            analysis.colorPreference = enColor;
+            break;
           }
         }
       }
 
-      // Đảm bảo có tên sản phẩm từ Product model
-      const productName = product.productId?.name || product.name || "Sản phẩm";
-      const productImage =
-        product.images?.main?.url ||
-        product.images?.[0]?.url ||
-        "/images/no-image.png";
-      const productColor =
-        product.color?.colorName || product.color?.name || "Đa màu";
-
-      return {
-        type: "product",
-        content: JSON.stringify({
-          variantId: product._id,
-          name: productName,
-          image: productImage,
-          price: selectedSize.price,
-          discount: product.discount || 0,
-          color: productColor,
-          size: selectedSize.size,
-          stock: selectedSize.stock,
-        }),
+      // Thêm priceRange nếu chưa có hoặc AI không extract đúng
+      const extractprice = (message) => {
+        const text = message.toLowerCase();
+        const regex = /(\d+)\s*(k|nghìn|ngàn|tr|triệu|trieu)?/g; // Thêm \s* để handle khoảng trắng
+        let numbers = [];
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+          let value = parseInt(match[1], 10);
+          
+          // Chỉ nhân một lần dựa trên đơn vị
+          if (match[2]) {
+            if (["k", "nghìn", "ngàn"].includes(match[2])) {
+              value *= 1000;
+            } else if (["tr", "triệu", "trieu"].includes(match[2])) {
+              value *= 1000000;
+            }
+          }
+          
+          numbers.push(value);
+          console.log(`💰 Extracted: "${match[0]}" → ${value}đ`);
+        }
+        let min = null,
+          max = null;
+        if (numbers.length === 1) {
+          if (
+            text.includes("dưới") ||
+            text.includes("nhỏ hơn") ||
+            text.includes("không quá")
+          ) {
+            max = numbers[0];
+          } else if (
+            text.includes("trên") ||
+            text.includes("từ") ||
+            text.includes("lớn hơn")
+          ) {
+            min = numbers[0];
+          }
+        } else if (numbers.length >= 2) {
+          min = Math.min(numbers[0], numbers[1]);
+          max = Math.max(numbers[0], numbers[1]);
+        }
+        return { min, max };
       };
+
+      const extractedPrice = extractprice(userMessage);
+      
+      // Debug: luôn log để kiểm tra
+      console.log('💰 Price analysis debug:', {
+        originalMessage: userMessage,
+        aiPrice: analysis.price,
+        extractedPrice: extractedPrice,
+        willUseExtracted: !analysis.price || (extractedPrice.min || extractedPrice.max)
+      });
+      
+      // Ưu tiên extracted price nếu AI không extract được hoặc extract sai
+      if (!analysis.price || (extractedPrice.min || extractedPrice.max)) {
+        analysis.price = extractedPrice;
+        console.log('💰 Using extracted price:', analysis.price);
+      }
+
+      // Xử lý unisex
+      if (userMessage.toLowerCase().includes("unisex")) {
+        analysis.gender = "unisex";
+        analysis.targetGender = "unisex";
+      }
+
+      // Log để debug
+      console.log("🎯 Intent analysis result:", {
+        originalMessage: userMessage,
+        detectedGender: analysis.gender,
+        targetGender: analysis.targetGender,
+        buyerInfo: analysis.buyerInfo,
+        colorPreference: analysis.colorPreference,
+        category: analysis.category,
+        price: analysis.price,
+      });
+
+      return analysis;
+    }
+
+    throw new Error("Invalid JSON response from AI");
+  } catch (error) {
+    console.error("❌ Intent analysis error:", error);
+    // Fallback analysis đơn giản
+    return {
+      intent:
+        userMessage.toLowerCase().includes("tìm") ||
+        userMessage.toLowerCase().includes("sản phẩm")
+          ? "product_search"
+          : "other",
+      category: null,
+      gender: null,
+      keywords: [],
+      hasPromotion: false,
+      bodyMeasurements: { weight: null, height: null },
+      targetGender: null,
+      buyerInfo: "mua cho bản thân",
+      colorPreference: null,
+      price: { min: null, max: null },
+    };
+  }
+};
+
+// Tìm sản phẩm dựa trên phân tích AI với logic tìm category sâu nhất
+const getAIRecommendedProducts = async (intentAnalysis, originalMessage) => {
+  try {
+    console.log('🛍️ AI Product search with analysis:', intentAnalysis);
+    console.log('📝 Original message:', originalMessage);
+    
+    // BƯỚC 1: Phân tích chi tiết input của user
+    const deepAnalysis = await analyzeUserInputForCategory(originalMessage, intentAnalysis);
+    console.log('🔬 Deep category analysis:', deepAnalysis);
+    
+    // BƯỚC 2: Tìm category sâu nhất dựa trên phân tích
+    const deepestCategory = await findDeepestMatchingCategory(deepAnalysis);
+    console.log('🎯 Deepest category found:', deepestCategory);
+    
+    if (!deepestCategory) {
+      console.log('❌ No matching category found');
+      return [];
+    }
+    
+    // BƯỚC 3: Tìm sản phẩm trong bảng Products theo categoryId chính xác
+    const products = await findProductsByCategoryId(deepestCategory._id);
+    console.log(`📦 Found ${products.length} products with categoryId: ${deepestCategory._id}`);
+    
+    // BƯỚC 4: Lấy ProductVariant tương ứng và format kết quả
+    const formattedProducts = await getProductVariantsAndFormat(products, deepAnalysis);
+    
+    console.log(`✅ Final formatted products: ${formattedProducts.length}`);
+    
+    return formattedProducts;
+    
+  } catch (error) {
+    console.error('❌ AI Product search error:', error);
+    return [];
+  }
+};
+
+// Phân tích sâu input của user để xác định category
+const analyzeUserInputForCategory = async (originalMessage, intentAnalysis) => {
+  try {
+    const prompt = `
+Phân tích chi tiết tin nhắn người dùng để tìm category thời trang chính xác nhất:
+
+Tin nhắn: "${originalMessage}"
+Intent đã có: ${JSON.stringify(intentAnalysis)}
+
+QUAN TRỌNG: Xác định đúng giới tính người sẽ dùng sản phẩm:
+- "mua cho người yêu" → gender: "Nữ" (vì người yêu của nam thường là nữ)
+- "mua cho bạn gái" → gender: "Nữ"  
+- "mua cho vợ" → gender: "Nữ"
+- "mua cho mẹ" → gender: "Nữ"
+- "mua cho chồng" → gender: "Nam"
+- "mua cho bạn trai" → gender: "Nam" 
+- "mua cho bố" → gender: "Nam"
+
+PHÂN TÍCH BUYER CONTEXT:
+- Khi nói "tôi là nam" + "cho người yêu tôi" → buyerContext: "mua cho người yêu"
+- Khi nói "tôi là nữ" + "cho bạn trai" → buyerContext: "mua cho bạn trai"
+
+QUAN TRỌNG VỀ PHÂN LOẠI SẢN PHẨM:
+- "croptop" hoặc "crop top" → subCategory: "Crop top" (là category riêng biệt)
+- "áo thun" → subCategory: "Thun" (category áo thun thông thường)
+- Crop top và áo thun là 2 loại khác nhau hoàn toàn
+- "tank top" → specificType: "tank top", subCategory: "Thun" 
+- KHÔNG được nhầm lẫn giữa crop top và áo thun
+
+Hãy phân tích và trả về JSON:
+{
+  "gender": "Nam|Nữ|Unisex",
+  "mainCategory": "Áo|Quần|Váy|Đầm|Phụ kiện|Giày dép",
+  "subCategory": "Sơ mi|Thun|Khoác|Jean|Short|Dài|...",
+  "specificType": "tank top|polo|hoodie|skinny|straight|...",
+  "keywords": ["từ khóa chính xác"],
+  "searchPriority": "specific|sub|main|gender",
+  "colorPreference": "trắng|đen|đỏ|xanh|...",
+  "buyerContext": "mua cho bản thân|mua cho người yêu|mua cho bạn gái|mua cho vợ|mua cho chồng|mua cho bạn trai|mua cho gia đình|..."
+}
+
+Quy tắc phân tích:
+1. Gender: Giới tính của người SẼ DÙNG sản phẩm (QUAN TRỌNG - không phải người mua)
+2. MainCategory: Loại sản phẩm chính (Áo, Quần, Váy...)
+3. SubCategory: Loại con cụ thể (Sơ mi, Thun, Jean...)
+4. SpecificType: Kiểu dáng đặc biệt (crop top, tank top, polo...)
+5. ColorPreference: Màu sắc yêu cầu
+6. BuyerContext: Bối cảnh mua hàng chi tiết
+
+Ví dụ phân tích đúng:
+- "áo croptop" → gender: "Nữ", mainCategory: "Áo", subCategory: "Crop top"
+- "áo thun nam" → gender: "Nam", mainCategory: "Áo", subCategory: "Thun"
+- "áo sơ mi cho người yêu tôi, tôi là nam" → gender: "Nữ", buyerContext: "mua cho người yêu"
+- "áo thun nam size L" → gender: "Nam", buyerContext: "mua cho bản thân"
+- "váy đẹp cho vợ" → gender: "Nữ", mainCategory: "Váy", buyerContext: "mua cho vợ"
+- "áo khoác cho bạn trai" → gender: "Nam", buyerContext: "mua cho bạn trai"
+
+Chỉ trả về JSON:
+`;
+
+    const result = await model.generateContent(prompt);
+    const response = result.response.text();
+    
+    console.log('🤖 Category analysis response:', response);
+    
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const analysis = JSON.parse(jsonMatch[0]);
+      
+      // QUAN TRỌNG: Logic override gender dựa trên buyer context
+      let finalGender = analysis.gender;
+      
+      // Nếu mua cho người yêu → cần xem giới tính của người mua để xác định giới tính người yêu
+      if (analysis.buyerContext && analysis.buyerContext.includes('người yêu')) {
+        // Tìm giới tính người mua từ tin nhắn gốc
+        const buyerGender = originalMessage.toLowerCase().includes('tôi là nam') ? 'nam' :
+                           originalMessage.toLowerCase().includes('tôi là nữ') ? 'nữ' : null;
+        
+        if (buyerGender === 'nam') {
+          finalGender = 'Nữ'; // Nam mua cho người yêu → người yêu là Nữ
+          console.log('🚻 Buyer is male → người yêu is female → gender: "Nữ"');
+        } else if (buyerGender === 'nữ') {
+          finalGender = 'Nam'; // Nữ mua cho người yêu → người yêu là Nam  
+          console.log('🚻 Buyer is female → người yêu is male → gender: "Nam"');
+        }
+      }
+      
+      // Nếu mua cho bạn gái/vợ → gender phải là "Nữ"
+      else if (analysis.buyerContext && 
+               (analysis.buyerContext.includes('bạn gái') ||
+                analysis.buyerContext.includes('vợ') ||
+                analysis.buyerContext.includes('mẹ') ||
+                analysis.buyerContext.includes('chị') ||
+                analysis.buyerContext.includes('em gái'))) {
+        finalGender = 'Nữ';
+        console.log('🚻 Override gender to "Nữ" based on buyer context:', analysis.buyerContext);
+      }
+      
+      // Nếu mua cho chồng/bạn trai/bố → gender phải là "Nam"  
+      else if (analysis.buyerContext && 
+               (analysis.buyerContext.includes('chồng') ||
+                analysis.buyerContext.includes('bạn trai') ||
+                analysis.buyerContext.includes('bố') ||
+                analysis.buyerContext.includes('anh') ||
+                analysis.buyerContext.includes('em trai'))) {
+        finalGender = 'Nam';
+        console.log('🚻 Override gender to "Nam" based on buyer context:', analysis.buyerContext);
+      }
+      
+      // Override từ intent analysis nếu có
+      else if (intentAnalysis.targetGender && intentAnalysis.buyerInfo === 'mua cho người khác') {
+        // Nhưng vẫn cần check buyer context để đảm bảo chính xác
+        if (intentAnalysis.targetGender === 'nữ' || intentAnalysis.targetGender === 'Nữ') {
+          finalGender = 'Nữ';
+        } else if (intentAnalysis.targetGender === 'nam' || intentAnalysis.targetGender === 'Nam') {
+          finalGender = 'Nam';
+        }
+      }
+      
+      // Set gender cuối cùng
+      analysis.gender = finalGender;
+      
+      // Thêm price từ intentAnalysis nếu có
+      if (intentAnalysis.price) {
+        analysis.price = intentAnalysis.price;
+        console.log('💰 Price from intent analysis:', analysis.price);
+      }
+      
+      // Override subCategory cho crop top nếu cần thiết
+      if (analysis.subCategory && analysis.subCategory.toLowerCase().includes('thun') && 
+          originalMessage.toLowerCase().includes('crop')) {
+        analysis.subCategory = 'Crop top';
+        console.log('👕 Override subCategory to "Crop top" for crop-related message');
+      }
+      
+      console.log('�🔍 Final gender determination:', {
+        originalGender: intentAnalysis.gender,
+        targetGender: intentAnalysis.targetGender,
+        buyerInfo: intentAnalysis.buyerInfo,
+        buyerContext: analysis.buyerContext,
+        finalGender: analysis.gender,
+        subCategory: analysis.subCategory,
+        overrideReason: analysis.buyerContext
+      });
+      
+      return analysis;
+    }
+    
+    // Fallback
+    return {
+      gender: intentAnalysis.targetGender || intentAnalysis.gender || null,
+      mainCategory: null,
+      subCategory: intentAnalysis.category || null,
+      specificType: null,
+      keywords: intentAnalysis.keywords || [],
+      searchPriority: "sub",
+      colorPreference: null,
+      buyerContext: intentAnalysis.buyerInfo || "mua cho bản thân"
+    };
+    
+  } catch (error) {
+    console.error('❌ Category analysis error:', error);
+    return {
+      gender: intentAnalysis.targetGender || intentAnalysis.gender || null,
+      mainCategory: null,
+      subCategory: intentAnalysis.category || null,
+      specificType: null,
+      keywords: intentAnalysis.keywords || [],
+      searchPriority: "keyword",
+      colorPreference: null,
+      buyerContext: intentAnalysis.buyerInfo || "mua cho bản thân"
+    };
+  }
+};
+
+// Tìm category sâu nhất phù hợp
+const findDeepestMatchingCategory = async (analysis) => {
+  try {
+    console.log('🔍 Finding deepest category with analysis:', analysis);
+    
+    let foundCategories = [];
+    
+    // BƯỚC 1: Tìm theo specific type trước (cao nhất)
+    if (analysis.specificType) {
+      console.log(`🎯 Searching for specific type: ${analysis.specificType}`);
+      
+      const specificCategories = await Category.find({
+        name: { $regex: new RegExp(analysis.specificType, 'i') }
+      }).populate('parentId', 'name level');
+      
+      if (specificCategories.length > 0) {
+        foundCategories = specificCategories;
+        console.log(`✅ Found ${specificCategories.length} categories for specific type`);
+        specificCategories.forEach(cat => {
+          console.log(`  � "${cat.name}" (Level: ${cat.level}, Parent: ${cat.parentId?.name || 'None'})`);
+        });
+      }
+    }
+    
+    // BƯỚC 2: Nếu không có specific type, tìm theo sub category
+    if (foundCategories.length === 0 && analysis.subCategory) {
+      console.log(`� Searching for sub category: ${analysis.subCategory}`);
+      
+      const subCategories = await Category.find({
+        name: { $regex: new RegExp(analysis.subCategory, 'i') }
+      }).populate('parentId', 'name level');
+      
+      if (subCategories.length > 0) {
+        foundCategories = subCategories;
+        console.log(`✅ Found ${subCategories.length} categories for sub category`);
+        subCategories.forEach(cat => {
+          console.log(`  📁 "${cat.name}" (Level: ${cat.level}, Parent: ${cat.parentId?.name || 'None'})`);
+        });
+      }
+    }
+    
+    // BƯỚC 3: Filter theo gender nếu có
+    if (foundCategories.length > 0 && analysis.gender) {
+      console.log(`🚻 Filtering by gender: ${analysis.gender}`);
+      
+      const genderFilteredCategories = [];
+      
+      for (const category of foundCategories) {
+        // Tìm root parent (level 1) để check gender
+        const rootParent = await findRootParent(category);
+        
+        if (rootParent && rootParent.name.toLowerCase().includes(analysis.gender.toLowerCase())) {
+          genderFilteredCategories.push(category);
+          console.log(`  ✅ "${category.name}" matches gender via root: "${rootParent.name}"`);
+        }
+      }
+      
+      if (genderFilteredCategories.length > 0) {
+        foundCategories = genderFilteredCategories;
+        console.log(`🎯 After gender filter: ${genderFilteredCategories.length} categories`);
+      }
+    }
+    
+    // BƯỚC 4: Chọn category sâu nhất (level cao nhất) và phù hợp nhất
+    if (foundCategories.length > 0) {
+      // Đặc biệt: Với crop top, ưu tiên "Áo thun" hơn "Set bộ thun/len"
+      if (analysis.specificType === 'crop top' || 
+          analysis.keywords.some(k => k.toLowerCase().includes('croptop') || k.toLowerCase().includes('crop top'))) {
+        
+        const aoThunCategory = foundCategories.find(cat => 
+          cat.name.toLowerCase().includes('áo thun') && 
+          !cat.name.toLowerCase().includes('set')
+        );
+        
+        if (aoThunCategory) {
+          console.log(`🎯 Special case for crop top: Selected "Áo thun" instead of other options`);
+          return aoThunCategory;
+        }
+      }
+      
+      // Logic chọn category thông thường - ưu tiên tên phù hợp nhất
+      let bestCategory = foundCategories[0];
+      
+      // Ưu tiên category không phải "Set bộ" cho sản phẩm đơn lẻ
+      if (analysis.specificType || analysis.subCategory) {
+        const nonSetCategories = foundCategories.filter(cat => 
+          !cat.name.toLowerCase().includes('set') &&
+          !cat.name.toLowerCase().includes('bộ')
+        );
+        
+        if (nonSetCategories.length > 0) {
+          bestCategory = nonSetCategories.reduce((best, current) => {
+            return current.level > best.level ? current : best;
+          });
+        }
+      } else {
+        // Chọn theo level cao nhất
+        bestCategory = foundCategories.reduce((deepest, current) => {
+          return current.level > deepest.level ? current : deepest;
+        });
+      }
+      
+      console.log(`🏆 Selected best category: "${bestCategory.name}" (Level: ${bestCategory.level})`);
+      return bestCategory;
+    }
+    
+    // BƯỚC 5: Fallback - tìm theo main category
+    if (analysis.mainCategory) {
+      console.log(`🔄 Fallback to main category: ${analysis.mainCategory}`);
+      
+      const mainCategories = await Category.find({
+        name: { $regex: new RegExp(analysis.mainCategory, 'i') }
+      });
+      
+      if (mainCategories.length > 0) {
+        const deepest = mainCategories.reduce((deepest, current) => {
+          return current.level > deepest.level ? current : deepest;
+        });
+        
+        console.log(`🔄 Fallback category found: "${deepest.name}" (Level: ${deepest.level})`);
+        return deepest;
+      }
+    }
+    
+    console.log('❌ No matching category found');
+    return null;
+    
+  } catch (error) {
+    console.error('❌ Find deepest category error:', error);
+    return null;
+  }
+};
+
+// Tìm root parent của category
+const findRootParent = async (category) => {
+  try {
+    if (category.level === 1) {
+      return category; // Đã là root
+    }
+    
+    if (!category.parentId) {
+      return null;
+    }
+    
+    const parent = await Category.findById(category.parentId);
+    if (!parent) {
+      return null;
+    }
+    
+    if (parent.level === 1) {
+      return parent; // Tìm thấy root
+    }
+    
+    // Đệ quy tìm tiếp
+    return await findRootParent(parent);
+    
+  } catch (error) {
+    console.error('❌ Find root parent error:', error);
+    return null;
+  }
+};
+
+// Tìm Products theo categoryId chính xác
+const findProductsByCategoryId = async (categoryId) => {
+  try {
+    console.log(`🔍 Searching products with categoryId: ${categoryId}`);
+    
+    const products = await Product.find({
+      categoryId: categoryId,
+      status: true // Chỉ lấy sản phẩm active
+    })
+    .populate('categoryId', 'name level parentId')
+    .populate('representativeVariantId')
+    .sort({ 
+      createdAt: -1, // Sản phẩm mới trước
+      views: -1 // Sản phẩm được xem nhiều
+    })
+    .limit(10); // Giới hạn để tránh quá tải
+    
+    console.log(`📦 Found ${products.length} products`);
+    
+    // Debug: Hiển thị sản phẩm tìm được
+    products.forEach((product, index) => {
+      console.log(`  ${index + 1}. "${product.name}" - Category: "${product.categoryId?.name}" (Level: ${product.categoryId?.level})`);
+    });
+    
+    return products;
+    
+  } catch (error) {
+    console.error('❌ Find products by categoryId error:', error);
+    return [];
+  }
+};
+
+// Lấy ProductVariant và format kết quả với filter màu sắc
+const getProductVariantsAndFormat = async (products, deepAnalysis) => {
+  try {
+    if (!products || products.length === 0) return [];
+
+    let variantQuery = {
+      productId: { $in: products.map((p) => p._id) },
+      "sizes.stock": { $gt: 0 }, // Có ít nhất 1 size còn hàng
+    };
+
+    // 🎨 Lọc theo màu sắc
+    if (deepAnalysis?.colorPreference) {
+      variantQuery["color.colorName"] = new RegExp(deepAnalysis.colorPreference, "i");
+      console.log("🎨 Color filter query:", variantQuery["color.colorName"]);
+    }
+
+    // 💰 Lọc theo khoảng giá (dùng $elemMatch để check trong array sizes)
+    if (
+      deepAnalysis?.price &&
+      (deepAnalysis.price.min != null || deepAnalysis.price.max != null)
+    ) {
+      const priceCondition = { stock: { $gt: 0 } }; // Chỉ check size còn hàng
+      
+      if (deepAnalysis.price.min != null) {
+        priceCondition.price = { $gte: deepAnalysis.price.min };
+      }
+      if (deepAnalysis.price.max != null) {
+        priceCondition.price = {
+          ...priceCondition.price,
+          $lte: deepAnalysis.price.max,
+        };
+      }
+
+      variantQuery.sizes = { $elemMatch: priceCondition };
+      
+      console.log("💰 Price filter:", {
+        min: deepAnalysis.price.min,
+        max: deepAnalysis.price.max,
+        elemMatch: priceCondition
+      });
+    }
+
+    // 🔍 Query ProductVariant
+    const variants = await ProductVariant.find(variantQuery)
+      .populate("productId")
+      .limit(10);
+
+    console.log(`📦 Found ${variants.length} ProductVariants with filters`);
+
+    // ✅ Format kết quả - bao gồm cả sizes array cho generateProductResponse
+    return variants.map((v) => ({
+      _id: v._id, // Add _id cho generateProductResponse
+      variantId: v._id,
+      productId: v.productId,
+      name: v.productId.name,
+      image: v.images?.[0] || v.productId.image || "",
+      price: v.sizes?.[0]?.price || v.price || 0,
+      discount: v.discount || 0,
+      color: v.color,
+      size: v.sizes?.[0]?.size || "Free size",
+      stock: v.stock,
+      sizes: v.sizes || [], // Thêm sizes array để generateProductResponse có thể access
+      images: v.images || [] // Thêm images array
+    }));
+  } catch (error) {
+    console.error("❌ getProductVariantsAndFormat error:", error);
+    return [];
+  }
+};
+
+// Tạo response kết hợp text + sản phẩm
+const generateProductResponse = async (intentAnalysis, product, originalMessage) => {
+  try {
+    // Lấy thông tin sản phẩm
+    const productName = product.productId?.name || product.name || "Sản phẩm";
+    const productImage = product.images?.main?.url || product.images?.[0]?.url || "/images/no-image.png";
+    const productColor = product.color?.colorName || product.color?.name || "Đa màu";
+    
+    // Chọn size và giá phù hợp
+    let selectedSize = null;
+    
+    if (product.sizes && product.sizes.length > 0) {
+      // Có sizes array - tìm size còn hàng
+      selectedSize = product.sizes.find(s => s.stock > 0) || product.sizes[0];
     } else {
-      return {
-        type: "text",
-        content:
-          "Tôi không tìm thấy sản phẩm phù hợp. Bạn có thể mô tả chi tiết hơn về sản phẩm bạn muốn tìm không?",
+      // Không có sizes array - dùng thông tin từ formatted object
+      selectedSize = {
+        size: product.size || "M",
+        price: product.price || 0,
+        stock: product.stock || 0
       };
     }
-  }
-
-  // Câu hỏi về giá
-  if (
-    message.includes("giá") ||
-    message.includes("bao nhiêu") ||
-    message.includes("cost") ||
-    message.includes("price")
-  ) {
-    return {
-      type: "text",
-      content:
-        "Sản phẩm của chúng tôi có nhiều mức giá khác nhau từ 200.000đ - 2.000.000đ tùy theo loại sản phẩm. Bạn có sản phẩm cụ thể nào muốn hỏi giá không?",
-    };
-  }
-
-  // Câu hỏi về giao hàng
-  if (
-    message.includes("giao hàng") ||
-    message.includes("ship") ||
-    message.includes("delivery")
-  ) {
-    return {
-      type: "text",
-      content:
-        "Chúng tôi có các hình thức giao hàng:\n• Giao hàng tiêu chuẩn: 2-3 ngày (30.000đ)\n• Giao hàng nhanh: 1-2 ngày (50.000đ)\n• Miễn phí ship cho đơn hàng trên 500.000đ",
-    };
-  }
-
-  // Câu hỏi về đổi trả
-  if (
-    message.includes("đổi") ||
-    message.includes("trả") ||
-    message.includes("return") ||
-    message.includes("exchange")
-  ) {
-    return {
-      type: "text",
-      content:
-        "Chính sách đổi trả của chúng tôi:\n• Đổi trả trong vòng 30 ngày\n• Sản phẩm chưa qua sử dụng\n• Còn nguyên tem, nhãn mác\n• Miễn phí đổi size trong 7 ngày đầu",
-    };
-  }
-
-  // Câu hỏi về thanh toán
-  if (
-    message.includes("thanh toán") ||
-    message.includes("payment") ||
-    message.includes("pay")
-  ) {
-    return {
-      type: "text",
-      content:
-        "Chúng tôi hỗ trợ các hình thức thanh toán:\n• COD (thanh toán khi nhận hàng)\n• Chuyển khoản ngân hàng\n• Ví điện tử: MoMo, ZaloPay\n• Thẻ tín dụng/ghi nợ",
-    };
-  }
-
-  // Câu hỏi về size với phân tích thông số cơ thể
-  if (
-    message.includes("size") ||
-    message.includes("kích cỡ") ||
-    message.includes("cỡ")
-  ) {
-    const sizeRecommendation = analyzeSizeFromMessage(message);
-    if (sizeRecommendation) {
-      return {
-        type: "text",
-        content: sizeRecommendation,
-      };
-    } else {
-      return {
-        type: "text",
-        content:
-          "Chúng tôi có đầy đủ size từ S đến XXL. Bảng size chi tiết:\n• S: 45-50kg\n• M: 50-55kg\n• L: 55-65kg\n• XL: 65-75kg\n• XXL: 75kg trở lên\n\nBạn có thể cho tôi biết cân nặng và chiều cao để tôi tư vấn size phù hợp nhất!",
-      };
+    
+    // Nếu có thông số cơ thể, gợi ý size phù hợp
+    if (intentAnalysis.bodyMeasurements?.weight || intentAnalysis.bodyMeasurements?.height) {
+      const recommendedSize = calculateRecommendedSize(
+        intentAnalysis.bodyMeasurements.weight,
+        intentAnalysis.bodyMeasurements.height
+      );
+      
+      if (recommendedSize && product.sizes && product.sizes.length > 0) {
+        const matchingSize = product.sizes.find(s => s.size === recommendedSize && s.stock > 0);
+        if (matchingSize) {
+          selectedSize = matchingSize;
+        }
+      }
     }
-  }
+    
+    // Tạo text response bằng AI
+    const textPrompt = `
+Bạn là AI tư vấn bán hàng thời trang chuyên nghiệp của Elavia Store.
+Khách hàng vừa hỏi: "${originalMessage}"
+Tôi đã tìm được sản phẩm phù hợp: "${productName}" - màu ${productColor}
 
-  // Câu trả lời mặc định
+Hãy tạo câu trả lời tư vấn nhiệt tình, chuyên nghiệp:
+- Giới thiệu sản phẩm một cách hấp dẫn
+- Nêu ưu điểm của sản phẩm
+- Khuyến khích khách hàng xem chi tiết
+- Tối đa 3-4 câu, tone thân thiện
+
+Không đề cập đến giá cụ thể, chỉ tập trung vào chất lượng và phong cách.
+`;
+
+    const result = await model.generateContent(textPrompt);
+    const aiText = result.response.text();
+    
+    return {
+      text: aiText,
+      product: {
+        variantId: product._id || product.variantId,
+        productId: product.productId?._id || product.productId,
+        name: productName,
+        image: productImage,
+        price: selectedSize?.price || 0,
+        discount: product.discount || 0,
+        color: productColor,
+        size: selectedSize?.size || "M",
+        stock: selectedSize?.stock || 0
+      }
+    };
+    
+  } catch (error) {
+    console.error('❌ Product response generation error:', error);
+    return {
+      text: `Tôi đã tìm thấy sản phẩm phù hợp cho bạn! Hãy xem chi tiết bên dưới nhé 😊`,
+      product: {
+        variantId: product._id || product.variantId,
+        productId: product.productId?._id || product.productId,
+        name: product.productId?.name || product.name || "Sản phẩm",
+        image: product.images?.main?.url || product.images?.[0] || "/images/no-image.png",
+        price: product.sizes?.[0]?.price || product.price || 0,
+        discount: product.discount || 0,
+        color: product.color?.colorName || product.color || "Đa màu",
+        size: product.sizes?.[0]?.size || product.size || "M",
+        stock: product.sizes?.[0]?.stock || product.stock || 0
+      }
+    };
+  }
+};
+
+// Tạo text response thuần túy  
+const generateTextResponse = async (userMessage, intentAnalysis) => {
+  try {
+    const prompt = `
+Bạn là AI tư vấn viên bán hàng thời trang của Elavia Store tại Việt Nam.
+Khách hàng vừa hỏi: "${userMessage}"
+
+Intent được phân tích: ${intentAnalysis.intent}
+
+Thông tin về store:
+- Tên: Elavia Store  
+- Chuyên: Thời trang nam nữ cao cấp
+- Giao hàng: Toàn quốc 2-5 ngày, miễn phí ship đơn >500k
+- Đổi trả: 30 ngày, miễn phí đổi size lần đầu trong 7 ngày
+- Thanh toán: COD, chuyển khoản, ví điện tử
+- Size: S-XXL với bảng size chi tiết
+- Chính sách: Hàng chính hãng, bảo hành chất lượng
+
+Hãy trả lời:
+- Chuyên nghiệp, thân thiện
+- Tối đa 4-5 câu
+- Sử dụng emoji phù hợp  
+- Khuyến khích hỏi thêm nếu cần
+- Nếu là chào hỏi: giới thiệu ngắn gọn về khả năng hỗ trợ
+- Nếu là FAQ: trả lời chính xác theo thông tin store
+- Nếu là size: hướng dẫn cách chọn size hoặc yêu cầu thông số
+
+Trả lời bằng tiếng Việt:
+`;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text();
+    
+  } catch (error) {
+    console.error('❌ Text response generation error:', error);
+    return "Xin chào! Tôi là AI tư vấn của Elavia Store. Tôi có thể giúp bạn tìm kiếm sản phẩm, tư vấn size và trả lời các câu hỏi về chính sách. Bạn cần hỗ trợ gì ạ? 😊";
+  }
+};
+
+// Fallback response khi AI lỗi
+const generateFallbackResponse = async (userMessage) => {
+  const message = userMessage.toLowerCase();
+  
+  // Các response cơ bản
+  if (message.includes("xin chào") || message.includes("hello") || message.includes("hi")) {
+    return {
+      type: "text",
+      content: "Xin chào! Tôi là AI tư vấn của Elavia Store. Tôi có thể giúp bạn tìm kiếm sản phẩm và trả lời các câu hỏi. Bạn cần hỗ trợ gì ạ? 😊"
+    };
+  }
+  
+  if (message.includes("ship") || message.includes("giao hàng")) {
+    return {
+      type: "text", 
+      content: "Chúng tôi giao hàng toàn quốc trong 2-5 ngày, miễn phí ship cho đơn từ 500k bạn nhé! 🚚"
+    };
+  }
+  
   return {
     type: "text",
-    content:
-      "Tôi hiểu bạn đang cần hỗ trợ. Tuy nhiên, câu hỏi này hơi phức tạp. Bạn có muốn tôi kết nối với tư vấn viên con người để được hỗ trợ tốt hơn không?",
+    content: "Tôi có thể giúp bạn tìm sản phẩm, tư vấn size, và trả lời câu hỏi về chính sách. Bạn muốn tôi hỗ trợ gì ạ? 😊"
   };
+};
+
+// Tính toán size dựa trên cân nặng và chiều cao
+const calculateRecommendedSize = (weight, height) => {
+  if (!weight) return null;
+  
+  let size;
+  if (weight <= 50) size = 'S';
+  else if (weight <= 55) size = 'M'; 
+  else if (weight <= 65) size = 'L';
+  else if (weight <= 75) size = 'XL';
+  else size = 'XXL';
+  
+  // Điều chỉnh theo chiều cao
+  if (height >= 180) {
+    if (size === 'S') size = 'M';
+    else if (size === 'M') size = 'L';  
+    else if (size === 'L') size = 'XL';
+  } else if (height <= 160) {
+    if (size === 'XL') size = 'L';
+    else if (size === 'XXL') size = 'XL';
+  }
+  
+  return size;
 };
 
 // Phân tích size từ tin nhắn có chứa thông số cơ thể
@@ -488,6 +1123,54 @@ const findCategoryByHierarchy = async (genderName, productTypeName) => {
   try {
     console.log(`🔍 Finding category for: ${genderName} -> ${productTypeName}`);
     
+    // Xử lý đặc biệt: tìm trực tiếp "crop top" trước
+    if (productTypeName.toLowerCase() === 'crop top') {
+      console.log('🎯 Searching for CROP TOP as independent category');
+      
+      // Tìm trực tiếp category có tên "crop top" hoặc tương tự
+      const cropTopCategory = await Category.findOne({
+        name: { $regex: /crop\s*top|croptop/i }
+      });
+      
+      if (cropTopCategory) {
+        console.log('✅ Found dedicated CROP TOP category:', cropTopCategory.name, cropTopCategory._id);
+        return cropTopCategory._id;
+      }
+      
+      // Nếu không có category riêng, tìm theo từ khóa trong Products
+      console.log('🔍 No dedicated crop top category, searching by keywords in products...');
+      return null; // Trả về null để fallback sang keyword search
+    }
+    
+    // Xử lý đặc biệt cho "tank top"
+    if (productTypeName.toLowerCase() === 'tank top') {
+      console.log('🎯 Searching for TANK TOP as independent category');
+      
+      const tankTopCategory = await Category.findOne({
+        name: { $regex: /tank\s*top|tanktop|áo\s*ba\s*lỗ|áo\s*2\s*dây/i }
+      });
+      
+      if (tankTopCategory) {
+        console.log('✅ Found dedicated TANK TOP category:', tankTopCategory.name, tankTopCategory._id);
+        return tankTopCategory._id;
+      }
+      
+      console.log('🔍 No dedicated tank top category, searching by keywords...');
+      return null;
+    }
+    
+    // Tìm theo cách thông thường cho các category khác
+    return await findStandardCategory(genderName, productTypeName);
+    
+  } catch (error) {
+    console.error('Error finding category:', error);
+    return null;
+  }
+};
+
+// Helper function để tìm category theo cách thông thường
+const findStandardCategory = async (genderName, productTypeName) => {
+  try {
     // Bước 1: Tìm gender category (level 1)
     const genderCategory = await Category.findOne({
       name: { $regex: new RegExp(genderName, 'i') },
@@ -529,7 +1212,7 @@ const findCategoryByHierarchy = async (genderName, productTypeName) => {
     return null;
     
   } catch (error) {
-    console.error('Error finding category:', error);
+    console.error('Error finding standard category:', error);
     return null;
   }
 };
