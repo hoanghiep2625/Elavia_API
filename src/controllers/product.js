@@ -170,13 +170,21 @@ export const deleteProduct = async (req, res) => {
 
     // Kiểm tra xem có variant nào liên quan không
     const variantCount = await ProductVariant.countDocuments({ productId: id });
+    
     if (variantCount > 0) {
-      return res.status(400).json({
-        message: "Không thể xóa sản phẩm vì vẫn còn biến thể liên quan",
-      });
+      const errorResponse = {
+        message: `Không thể xóa sản phẩm này vì vẫn còn ${variantCount} biến thể liên quan. Vui lòng xóa tất cả biến thể trước khi xóa sản phẩm.`,
+        details: {
+          variantCount: variantCount,
+          suggestion: "Hãy vào quản lý biến thể để xóa các biến thể trước"
+        }
+      };
+      
+      return res.status(400).json(errorResponse);
     }
 
     const product = await Product.findByIdAndDelete(id);
+    
     if (!product) {
       return res.status(404).json({ message: "Sản phẩm không tồn tại" });
     }
@@ -203,16 +211,61 @@ export const deleteProductBulkDelete = async (req, res) => {
         .json({ message: "Vui lòng cung cấp mảng ids sản phẩm cần xóa" });
     }
 
-    const result = await Product.deleteMany({ _id: { $in: ids } });
-    await ProductVariant.deleteMany({ productId: { $in: ids } });
+    // Kiểm tra từng sản phẩm có variant hay không
+    const productChecks = await Promise.all(
+      ids.map(async (id) => {
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+          return { id, hasVariants: false, error: "ID không hợp lệ" };
+        }
+        
+        const variantCount = await ProductVariant.countDocuments({ productId: id });
+        const product = await Product.findById(id).select('name');
+        
+        return { 
+          id, 
+          hasVariants: variantCount > 0, 
+          variantCount,
+          productName: product?.name || "Không xác định"
+        };
+      })
+    );
+
+    // Tìm những sản phẩm có variant
+    const productsWithVariants = productChecks.filter(p => p.hasVariants);
+    
+    if (productsWithVariants.length > 0) {
+      const errorDetails = productsWithVariants.map(p => 
+        `• ${p.productName} (${p.variantCount} biến thể)`
+      ).join('\n');
+      
+      return res.status(400).json({
+        message: `Không thể xóa ${productsWithVariants.length} sản phẩm vì vẫn còn biến thể liên quan:`,
+        details: errorDetails,
+        suggestion: "Vui lòng xóa tất cả biến thể trước khi xóa sản phẩm"
+      });
+    }
+
+    // Chỉ xóa những sản phẩm không có variant
+    const validIds = productChecks
+      .filter(p => !p.hasVariants && !p.error)
+      .map(p => p.id);
+
+    if (validIds.length === 0) {
+      return res.status(400).json({
+        message: "Không có sản phẩm nào có thể xóa"
+      });
+    }
+
+    const result = await Product.deleteMany({ _id: { $in: validIds } });
 
     return res.status(200).json({
-      message: "Xóa sản phẩm hàng loạt thành công",
+      message: `Xóa thành công ${result.deletedCount} sản phẩm`,
       deletedCount: result.deletedCount,
     });
   } catch (error) {
-    return res.status(400).json({
-      message: error.message,
+    return res.status(500).json({
+      message: "Lỗi server khi xóa sản phẩm hàng loạt",
+      error: error.message,
     });
   }
 };

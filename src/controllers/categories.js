@@ -98,29 +98,47 @@ export const getCategoryById = async (req, res) => {
 export const deleteCategory = async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ message: "Invalid category ID" });
+      return res.status(400).json({ 
+        message: "ID danh mục không hợp lệ",
+        error: "Invalid category ID" 
+      });
     }
 
     const category = await Category.findById(req.params.id);
     if (!category) {
-      return res.status(404).json({ message: "Danh mục không tồn tại" });
+      return res.status(404).json({ 
+        message: "Danh mục không tồn tại",
+        error: "Category not found" 
+      });
     }
 
-    const hasChildren = await Category.exists({ parentId: req.params.id });
-    if (hasChildren) {
-      return res
-        .status(400)
-        .json({ message: "Không thể xóa danh mục có danh mục con" });
+    const childrenCount = await Category.countDocuments({ parentId: req.params.id });
+    if (childrenCount > 0) {
+      const children = await Category.find({ parentId: req.params.id }).select('name');
+      const childrenNames = children.map(child => child.name).join(', ');
+      
+      return res.status(400).json({ 
+        message: `Không thể xóa danh mục "${category.name}" vì còn ${childrenCount} danh mục con: ${childrenNames}`,
+        error: `Không thể xóa danh mục "${category.name}" vì còn ${childrenCount} danh mục con: ${childrenNames}`,
+        details: {
+          categoryName: category.name,
+          childrenCount,
+          childrenNames: children.map(child => child.name)
+        }
+      });
     }
 
     await Category.findByIdAndDelete(req.params.id);
+    
     return res.status(200).json({
-      message: "Xóa danh mục thành công",
+      message: `Xóa danh mục "${category.name}" thành công`,
       data: category,
     });
   } catch (error) {
-    return res.status(400).json({
-      message: error.message,
+    console.error('Error deleting category:', error);
+    return res.status(500).json({
+      message: "Lỗi hệ thống khi xóa danh mục",
+      error: error.message,
     });
   }
 };

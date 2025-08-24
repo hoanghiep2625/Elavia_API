@@ -47,7 +47,29 @@ export const createReview = (req, res) => {
         : [];
       const status = await checkCommentWithGemini(comment);
 
-      // Tạo review với updateCount = 0
+      // Nếu AI từ chối, không tạo review trong database, chỉ trả về thông báo lỗi
+      if (status === "rejected") {
+        // Xóa ảnh đã upload nếu AI từ chối
+        if (images.length > 0) {
+          await Promise.all(
+            images.map(async (img) => {
+              try {
+                await cloudinary.uploader.destroy(img.public_id);
+              } catch (err) {
+                console.error("Không thể xóa ảnh sau khi AI từ chối:", img.public_id);
+              }
+            })
+          );
+        }
+        
+        return res.status(400).json({ 
+          message: "Đánh giá của bạn chứa ngôn từ không phù hợp. Vui lòng chỉnh sửa và thử lại!", 
+          status: "rejected",
+          canRetry: true
+        });
+      }
+
+      // Chỉ tạo review nếu approved hoặc pending
       const review = await Review.create({
         userId: req.user.id,
         orderId,
@@ -65,9 +87,20 @@ export const createReview = (req, res) => {
         { $set: { "items.$.reviewed": true } }
       );
 
-      return res
-        .status(201)
-        .json({ message: "Đánh giá thành công", data: review });
+      // Trả về response dựa trên status
+      if (status === "approved") {
+        return res.status(201).json({ 
+          message: "Đánh giá của bạn đã được duyệt và hiển thị thành công!", 
+          data: review,
+          status: "approved"
+        });
+      } else {
+        return res.status(201).json({ 
+          message: "Đánh giá của bạn đang chờ duyệt. Chúng tôi sẽ xem xét và phản hồi sớm nhất!", 
+          data: review,
+          status: "pending"
+        });
+      }
     } catch (error) {
       if (error.code === 11000) {
         return res.status(400).json({
@@ -80,10 +113,63 @@ export const createReview = (req, res) => {
 };
 
 // Lấy danh sách đánh giá theo productVariantId
+
+// Lấy tất cả đánh giá của một sản phẩm (tất cả variants)
+export const getReviewsByProduct = async (req, res) => {
+  try {
+    let { productId } = req.params;
+    
+    // Import models
+    const ProductVariant = (await import('../models/productVariant.js')).default;
+    
+    // Kiểm tra xem productId có phải là productVariantId không
+    let actualProductId = productId;
+    const variant = await ProductVariant.findById(productId).populate('productId');
+    
+    if (variant && variant.productId) {
+      // Nếu productId thực chất là productVariantId, lấy productId thật
+      actualProductId = variant.productId._id;
+      console.log(`Converted productVariantId ${productId} to productId ${actualProductId}`);
+    }
+    
+    // Lấy tất cả product variants của product này
+    const productVariants = await ProductVariant.find({ productId: actualProductId }).select('_id');
+    const variantIds = productVariants.map(variant => variant._id);
+    
+    // Lấy tất cả reviews của các variants này, chỉ những review đã approved
+    const reviews = await Review.find({ 
+      productVariantId: { $in: variantIds },
+      status: "approved" // Chỉ lấy reviews đã được duyệt
+    })
+      .select(
+        "rating comment images createdAt userId orderId productVariantId reply status"
+      )
+      .populate("userId", "name")
+      .populate("orderId", "orderId")
+      .populate({
+        path: "productVariantId",
+        select: "color size",
+        populate: {
+          path: "productId",
+          select: "name"
+        }
+      })
+      .sort({ createdAt: -1 });
+      
+    return res.status(200).json({ data: reviews });
+  } catch (error) {
+    console.error("Error getting reviews by product:", error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 export const getReviewsByProductVariant = async (req, res) => {
   try {
     const { productVariantId } = req.params;
-    const reviews = await Review.find({ productVariantId })
+    const reviews = await Review.find({ 
+      productVariantId,
+      status: "approved" // Chỉ lấy reviews đã được duyệt
+    })
       .select(
         "rating comment images createdAt userId orderId productVariantId reply"
       )
@@ -130,16 +216,30 @@ export const updateReview = (req, res) => {
       const contentChanged =
         comment?.trim() !== review.comment?.trim() || rating !== review.rating;
 
-      review.rating = rating ?? review.rating;
-      review.comment = comment ?? review.comment;
-
-      // Nếu có sửa nội dung -> kiểm duyệt lại bằng AI
+      // Nếu có sửa nội dung -> kiểm duyệt lại bằng AI trước khi lưu
       if (contentChanged) {
         const newStatus = await checkCommentWithGemini(comment);
+        
+        // Nếu AI từ chối nội dung mới, không lưu thay đổi
+        if (newStatus === "rejected") {
+          return res.status(400).json({ 
+            message: "Nội dung đánh giá chỉnh sửa chứa ngôn từ không phù hợp. Vui lòng thay đổi và thử lại!", 
+            status: "rejected",
+            canRetry: true
+          });
+        }
+        
+        // Chỉ cập nhật nếu AI approve hoặc pending
+        review.rating = rating ?? review.rating;
+        review.comment = comment ?? review.comment;
         review.status = newStatus;
         review.reply = undefined;
         review.approvedBy = undefined;
         review.approvedAt = undefined;
+      } else {
+        // Không có thay đổi nội dung, chỉ cập nhật rating nếu có
+        review.rating = rating ?? review.rating;
+        review.comment = comment ?? review.comment;
       }
 
       // XÓA ẢNH
@@ -193,6 +293,23 @@ export const updateReview = (req, res) => {
       
       await review.save();
 
+      // Trả về response dựa trên status sau khi cập nhật
+      if (contentChanged) {
+        if (review.status === "approved") {
+          return res.status(200).json({ 
+            message: "Cập nhật đánh giá thành công và đã được duyệt!", 
+            data: review,
+            status: "approved"
+          });
+        } else if (review.status === "pending") {
+          return res.status(200).json({ 
+            message: "Cập nhật đánh giá thành công. Đánh giá đang chờ duyệt!", 
+            data: review,
+            status: "pending"
+          });
+        }
+      }
+      
       return res
         .status(200)
         .json({ message: "Sửa đánh giá thành công", data: review });

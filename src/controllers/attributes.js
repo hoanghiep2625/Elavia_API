@@ -79,7 +79,7 @@ export const createAttribute = async (req, res) => {
     const { name, slug, values } = result.data;
     const exists = await Attribute.findOne({ slug });
     if (exists) {
-      return res.status(400).json({ message: "Slug đã tồn tại" });
+      return res.status(400).json({ message: `Slug "${slug}" đã tồn tại` });
     }
 
     const attribute = await Attribute.create({ name, slug, values });
