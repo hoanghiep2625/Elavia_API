@@ -1371,7 +1371,7 @@ export const getSpringSummerCollectionWomen = async (req, res) => {
     // 3. Lấy tất cả product thuộc các category này và thuộc collection
     const products = await Product.find({
       categoryId: { $in: womenCategoryIds },
-      status
+      status: true,
       // collection: "fall-winter-2024",   dùng nếu cần lọc theo collection trongdb
     }).select("_id");
     const productIds = products.map((p) => p._id);
@@ -1427,13 +1427,11 @@ export const getSpringSummerCollectionWomen = async (req, res) => {
       attributes: attrObj,
     });
 
-    // Xử lý sort động
     let sort = { createdAt: -1 };
     if (req.query.sortBy && req.query.order) {
       sort = { [req.query.sortBy]: req.query.order === "desc" ? -1 : 1 };
     }
 
-    // Lấy tất cả variant thỏa mãn filter, sort
     const allVariants = await ProductVariant.find(query)
       .populate("productId")
       .sort(sort);
@@ -1497,23 +1495,18 @@ export const getSpringSummerCollectionMen = async (req, res) => {
       sortBy,
     } = req.query;
 
-    // 1. Tìm category cha "Nam"
     const menRoot = await Category.findOne({ name: /nam/i });
     if (!menRoot) return res.status(200).json({ data: [] });
 
-    // 2. Lấy tất cả category con (bao gồm chính nó)
     const allCategories = await Category.find();
     const menCategoryIds = getAllChildCategoryIds(allCategories, menRoot._id);
 
-    // 3. Lấy tất cả product thuộc các category này và thuộc collection
     const products = await Product.find({
       categoryId: { $in: menCategoryIds },
       status: true,
-      // collection: "fall-winter-2024", dùng nếu cần lọc theo collection trongdb
     }).select("_id");
     const productIds = products.map((p) => p._id);
 
-    // 4. Parse parameters and create query with helper function
     let priceArr = [];
     if (priceRange) {
       if (Array.isArray(priceRange)) {
