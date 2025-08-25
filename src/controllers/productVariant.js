@@ -5,6 +5,7 @@ import cloudinary from "../config/cloudinary.js";
 import { parseFormData } from "../utils/parseFormData.js";
 import RecentlyViewed from "../models/recentlyViewed.js";
 import ProductVariantSnapshot from "../models/productVariantSnapshot.js";
+import Order from "../models/order.js"; 
 import {
   productVariantSchema,
   patchProductVariantSchema,
@@ -1314,8 +1315,7 @@ export const getNewArrivalMen = async (req, res) => {
   }
 };
 
-export const getSpringSummerCollectionWomen = async (req, res) => {
-  // Hàm lấy mỗi productId 1 variant đại diện (ưu tiên mới nhất)
+export const getbestsellingProductsWomen = async (req, res) => {
   const getRepresentativeVariants = (variants) => {
     const seen = new Set();
     const representatives = [];
@@ -1329,7 +1329,6 @@ export const getSpringSummerCollectionWomen = async (req, res) => {
     return representatives;
   };
 
-  // Hàm lấy tất cả _id con của một danh mục gốc
   const getAllChildCategoryIds = (allCategories, rootId) => {
     const result = [rootId];
     const stack = [rootId];
@@ -1356,43 +1355,76 @@ export const getSpringSummerCollectionWomen = async (req, res) => {
       attributes = {},
       sortBy,
     } = req.query;
+    console.log("Query Params:", { page, limit, color, sizes, priceRange, attributes });
 
     // 1. Tìm category cha "Nữ"
     const womenRoot = await Category.findOne({ name: /nữ/i });
+    console.log("Women Root Category:", womenRoot);
     if (!womenRoot) return res.status(200).json({ data: [] });
 
-    // 2. Lấy tất cả category con (bao gồm chính nó)
+    // 2. Lấy tất cả category con
     const allCategories = await Category.find();
-    const womenCategoryIds = getAllChildCategoryIds(
-      allCategories,
-      womenRoot._id
-    );
+    const womenCategoryIds = getAllChildCategoryIds(allCategories, womenRoot._id);
+    console.log("Women Category IDs:", womenCategoryIds);
 
-    // 3. Lấy tất cả product thuộc các category này và thuộc collection
+    // 3. Kiểm tra sản phẩm trong danh mục "Nữ"
     const products = await Product.find({
       categoryId: { $in: womenCategoryIds },
       status: true,
       // collection: "fall-winter-2024",   dùng nếu cần lọc theo collection trongdb
     }).select("_id");
-    const productIds = products.map((p) => p._id);
+    console.log("Products in Women Category:", products.length);
 
-    // 4. Parse parameters and create query with helper function
-    let priceArr = [];
-    if (priceRange) {
-      if (Array.isArray(priceRange)) {
-        priceArr = priceRange.map(Number);
-      } else if (typeof priceRange === "string") {
-        if (priceRange.includes(",")) {
-          priceArr = priceRange.split(",").map(Number);
-        } else {
-          try {
-            priceArr = JSON.parse(priceRange);
-          } catch {
-            priceArr = [];
-          }
+    // 4. Lấy danh sách productId từ Order (chỉ lấy đơn hàng thành công)
+    const orders = await Order.find({
+      $or: [
+        { paymentStatus: "Đã thanh toán" },
+        { shippingStatus: "Đã nhận hàng" }
+      ]
+    }).select("items.productVariantId");
+    console.log("Orders count:", orders.length);
+    const productVariantIds = new Set();
+    orders.forEach((order) => {
+      order.items.forEach((item) => {
+        if (item.productVariantId) {
+          productVariantIds.add(String(item.productVariantId));
         }
-      }
+      });
+    });
+    console.log("Product Variant IDs:", Array.from(productVariantIds));
+
+    // 5. Lấy variant từ productVariantIds và thuộc category "Nữ"
+    const variantsFromOrders = await ProductVariant.find({
+      _id: { $in: Array.from(productVariantIds) },
+    })
+      .populate({
+        path: "productId",
+        match: { categoryId: { $in: womenCategoryIds } },
+      })
+      .lean();
+    const validVariants = variantsFromOrders.filter(
+      (variant) => variant.productId !== null
+    );
+    console.log("Valid Variants:", validVariants.length);
+    console.log("Valid Variants Details:", validVariants);
+
+    if (!validVariants.length) {
+      return res.status(200).json({
+        data: [],
+        totalPages: 0,
+        currentPage: parseInt(page),
+        total: 0,
+      });
     }
+
+    // 6. Parse parameters and create query
+    let priceArr = priceRange
+      ? Array.isArray(priceRange)
+        ? priceRange.map(Number)
+        : priceRange.includes(",")
+        ? priceRange.split(",").map(Number)
+        : JSON.parse(priceRange)
+      : [0, 10000000];
     if (
       !(
         Array.isArray(priceArr) &&
@@ -1404,42 +1436,37 @@ export const getSpringSummerCollectionWomen = async (req, res) => {
       priceArr = [0, 10000000];
     }
 
-    let sizesArr = [];
-    if (sizes) {
-      sizesArr = typeof sizes === "string" ? JSON.parse(sizes) : sizes;
-    }
-
-    let attrObj = {};
-    if (attributes) {
-      try {
-        attrObj =
-          typeof attributes === "string" ? JSON.parse(attributes) : attributes;
-      } catch {
-        attrObj = {};
-      }
-    }
+    let sizesArr = sizes ? (typeof sizes === "string" ? JSON.parse(sizes) : sizes) : [];
+    let attrObj = attributes
+      ? typeof attributes === "string"
+        ? JSON.parse(attributes)
+        : attributes
+      : {};
 
     const query = buildProductVariantQuery({
-      productIds,
+      productIds: validVariants.map((v) => v.productId._id),
       sizes: sizesArr,
       color,
       priceRange: priceArr,
       attributes: attrObj,
     });
+    console.log("Query:", query);
 
     let sort = { createdAt: -1 };
-    if (req.query.sortBy && req.query.order) {
-      sort = { [req.query.sortBy]: req.query.order === "desc" ? -1 : 1 };
+    if (sortBy && req.query.order) {
+      sort = { [sortBy]: req.query.order === "desc" ? -1 : 1 };
     }
 
     const allVariants = await ProductVariant.find(query)
       .populate("productId")
       .sort(sort);
+    console.log("All Variants:", allVariants.length);
 
     // Lấy mỗi productId 1 variant đại diện
     const representatives = getRepresentativeVariants(allVariants);
+    console.log("Representatives:", representatives.length);
 
-    // Phân trang thủ công
+    // Phân trang
     const total = representatives.length;
     const totalPages = Math.ceil(total / limit);
     const docs = representatives.slice((page - 1) * limit, page * limit);
@@ -1451,10 +1478,11 @@ export const getSpringSummerCollectionWomen = async (req, res) => {
       total,
     });
   } catch (error) {
+    console.error("Error:", error.message);
     return res.status(500).json({ message: error.message });
   }
 };
-export const getSpringSummerCollectionMen = async (req, res) => {
+export const getbestsellingProductsMen = async (req, res) => {
   const getRepresentativeVariants = (variants) => {
     const seen = new Set();
     const representatives = [];
@@ -1494,13 +1522,35 @@ export const getSpringSummerCollectionMen = async (req, res) => {
       attributes = {},
       sortBy,
     } = req.query;
+    console.log("Query Params:", { page, limit, color, sizes, priceRange, attributes });
 
     const menRoot = await Category.findOne({ name: /nam/i });
+    console.log("Men Root Category:", menRoot);
     if (!menRoot) return res.status(200).json({ data: [] });
 
     const allCategories = await Category.find();
     const menCategoryIds = getAllChildCategoryIds(allCategories, menRoot._id);
+    console.log("Men Category IDs:", menCategoryIds);
 
+    // 3. Kiểm tra sản phẩm trong danh mục "Nam"
+    const products = await Product.find({
+      categoryId: { $in: menCategoryIds },
+    }).select("_id");
+    console.log("Products in Men Category:", products.length);
+
+    // 4. Lấy danh sách productId từ Order (chỉ lấy đơn hàng thành công)
+    const orders = await Order.find({
+      $or: [
+        { paymentStatus: "Đã thanh toán" },
+        { shippingStatus: "Đã nhận hàng" }
+      ]
+    }).select("items.productVariantId");
+    console.log("Orders count:", orders.length);
+    const productVariantIds = new Set();
+    orders.forEach((order) => {
+      order.items.forEach((item) => {
+        if (item.productVariantId) {
+          productVariantIds.add(String(item.productVariantId));
     const products = await Product.find({
       categoryId: { $in: menCategoryIds },
       status: true,
@@ -1521,8 +1571,42 @@ export const getSpringSummerCollectionMen = async (req, res) => {
             priceArr = [];
           }
         }
-      }
+      });
+    });
+    console.log("Product Variant IDs:", Array.from(productVariantIds));
+
+    // 5. Lấy variant từ productVariantIds và thuộc category "Nam"
+    const variantsFromOrders = await ProductVariant.find({
+      _id: { $in: Array.from(productVariantIds) },
+    })
+      .populate({
+        path: "productId",
+        match: { categoryId: { $in: menCategoryIds } },
+      })
+      .lean();
+    const validVariants = variantsFromOrders.filter(
+      (variant) => variant.productId !== null
+    );
+    console.log("Valid Variants:", validVariants.length);
+    console.log("Valid Variants Details:", validVariants);
+
+    if (!validVariants.length) {
+      return res.status(200).json({
+        data: [],
+        totalPages: 0,
+        currentPage: parseInt(page),
+        total: 0,
+      });
     }
+
+    // 6. Parse parameters and create query
+    let priceArr = priceRange
+      ? Array.isArray(priceRange)
+        ? priceRange.map(Number)
+        : priceRange.includes(",")
+        ? priceRange.split(",").map(Number)
+        : JSON.parse(priceRange)
+      : [0, 10000000];
     if (
       !(
         Array.isArray(priceArr) &&
@@ -1534,44 +1618,39 @@ export const getSpringSummerCollectionMen = async (req, res) => {
       priceArr = [0, 10000000];
     }
 
-    let sizesArr = [];
-    if (sizes) {
-      sizesArr = typeof sizes === "string" ? JSON.parse(sizes) : sizes;
-    }
-
-    let attrObj = {};
-    if (attributes) {
-      try {
-        attrObj =
-          typeof attributes === "string" ? JSON.parse(attributes) : attributes;
-      } catch {
-        attrObj = {};
-      }
-    }
+    let sizesArr = sizes ? (typeof sizes === "string" ? JSON.parse(sizes) : sizes) : [];
+    let attrObj = attributes
+      ? typeof attributes === "string"
+        ? JSON.parse(attributes)
+        : attributes
+      : {};
 
     const query = buildProductVariantQuery({
-      productIds,
+      productIds: validVariants.map((v) => v.productId._id),
       sizes: sizesArr,
       color,
       priceRange: priceArr,
       attributes: attrObj,
     });
+    console.log("Query:", query);
 
     // Xử lý sort động
     let sort = { createdAt: -1 };
-    if (req.query.sortBy && req.query.order) {
-      sort = { [req.query.sortBy]: req.query.order === "desc" ? -1 : 1 };
+    if (sortBy && req.query.order) {
+      sort = { [sortBy]: req.query.order === "desc" ? -1 : 1 };
     }
 
     // Lấy tất cả variant thỏa mãn filter, sort
     const allVariants = await ProductVariant.find(query)
       .populate("productId")
       .sort(sort);
+    console.log("All Variants:", allVariants.length);
 
     // Lấy mỗi productId 1 variant đại diện
     const representatives = getRepresentativeVariants(allVariants);
+    console.log("Representatives:", representatives.length);
 
-    // Phân trang thủ công
+    // Phân trang
     const total = representatives.length;
     const totalPages = Math.ceil(total / limit);
     const docs = representatives.slice((page - 1) * limit, page * limit);
@@ -1583,6 +1662,7 @@ export const getSpringSummerCollectionMen = async (req, res) => {
       total,
     });
   } catch (error) {
+    console.error("Error:", error.message);
     return res.status(500).json({ message: error.message });
   }
 };

@@ -12,8 +12,8 @@ import {
   getProductVariantsByCategory,
   getNewArrivalWomen,
   getNewArrivalMen,
-  getSpringSummerCollectionMen,
-  getSpringSummerCollectionWomen,
+  getbestsellingProductsWomen,
+  getbestsellingProductsMen
 } from "../controllers/productVariant.js";
 import { getRecentlyViewedProducts } from "../controllers/productVariant.js";
 import { checkAuth } from "../middlewares/checkAuth.js";
@@ -34,6 +34,6 @@ router.get("/:id", getProductVariantById);
 router.post("/by-category", getProductVariantsByCategory);
 router.get("/new-arrival/women", getNewArrivalWomen);
 router.get("/new-arrival/men", getNewArrivalMen);
-router.get("/spring-summer-collection/women", getSpringSummerCollectionWomen);
-router.get("/spring-summer-collection/men", getSpringSummerCollectionMen);
+router.get("/bestsellingProducts/women", getbestsellingProductsWomen );
+router.get("/bestsellingProducts/men", getbestsellingProductsMen );
 export default router;
