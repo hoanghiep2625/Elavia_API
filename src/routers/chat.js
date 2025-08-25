@@ -46,6 +46,9 @@ router.get("/conversations", checkAuth, getUserConversations);
 // Toggle AI advisor cho conversation
 router.put("/conversation/:conversationId/ai", checkAuth, updateConversationAI);
 
+// Lấy categories cho AI
+router.get("/categories", getChatProducts);
+
 // ============ ADMIN ROUTES ============
 // Dashboard thống kê
 router.get("/admin/stats", checkAuth, checkAuthAdmin, getChatStats);

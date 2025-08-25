@@ -874,6 +874,7 @@ export const getProductVariantsByCategory = async (req, res) => {
     // Lấy tất cả product thuộc các category này
     const products = await Product.find({
       categoryId: { $in: categoryIds },
+      status: true,
     }).select("_id");
     const productIds = products.map((p) => p._id);
 
@@ -1091,6 +1092,7 @@ export const getNewArrivalWomen = async (req, res) => {
     // 3. Lấy productIds thuộc các category này
     const products = await Product.find({
       categoryId: { $in: womenCategoryIds },
+      status: true,
     }).select("_id");
     const productIds = products.map((p) => p._id);
 
@@ -1225,6 +1227,7 @@ export const getNewArrivalMen = async (req, res) => {
 
     const products = await Product.find({
       categoryId: { $in: menCategoryIds },
+      status: true,
     }).select("_id");
     const productIds = products.map((p) => p._id);
 
@@ -1367,6 +1370,8 @@ export const getbestsellingProductsWomen = async (req, res) => {
     // 3. Kiểm tra sản phẩm trong danh mục "Nữ"
     const products = await Product.find({
       categoryId: { $in: womenCategoryIds },
+      status: true,
+      // collection: "fall-winter-2024",   dùng nếu cần lọc theo collection trongdb
     }).select("_id");
     console.log("Products in Women Category:", products.length);
 
@@ -1447,13 +1452,11 @@ export const getbestsellingProductsWomen = async (req, res) => {
     });
     console.log("Query:", query);
 
-    // Xử lý sort động
     let sort = { createdAt: -1 };
     if (sortBy && req.query.order) {
       sort = { [sortBy]: req.query.order === "desc" ? -1 : 1 };
     }
 
-    // Lấy tất cả variant thỏa mãn filter, sort
     const allVariants = await ProductVariant.find(query)
       .populate("productId")
       .sort(sort);
@@ -1521,12 +1524,10 @@ export const getbestsellingProductsMen = async (req, res) => {
     } = req.query;
     console.log("Query Params:", { page, limit, color, sizes, priceRange, attributes });
 
-    // 1. Tìm category cha "Nam"
     const menRoot = await Category.findOne({ name: /nam/i });
     console.log("Men Root Category:", menRoot);
     if (!menRoot) return res.status(200).json({ data: [] });
 
-    // 2. Lấy tất cả category con
     const allCategories = await Category.find();
     const menCategoryIds = getAllChildCategoryIds(allCategories, menRoot._id);
     console.log("Men Category IDs:", menCategoryIds);
@@ -1550,6 +1551,25 @@ export const getbestsellingProductsMen = async (req, res) => {
       order.items.forEach((item) => {
         if (item.productVariantId) {
           productVariantIds.add(String(item.productVariantId));
+    const products = await Product.find({
+      categoryId: { $in: menCategoryIds },
+      status: true,
+    }).select("_id");
+    const productIds = products.map((p) => p._id);
+
+    let priceArr = [];
+    if (priceRange) {
+      if (Array.isArray(priceRange)) {
+        priceArr = priceRange.map(Number);
+      } else if (typeof priceRange === "string") {
+        if (priceRange.includes(",")) {
+          priceArr = priceRange.split(",").map(Number);
+        } else {
+          try {
+            priceArr = JSON.parse(priceRange);
+          } catch {
+            priceArr = [];
+          }
         }
       });
     });

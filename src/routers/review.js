@@ -3,6 +3,7 @@ import { checkAuth } from "../middlewares/checkAuth.js";
 import {
   createReview,
   getReviewsByProductVariant,
+  getReviewsByProduct,
   updateReview,
   deleteReview,
   getReviewsByOrder,
@@ -14,6 +15,7 @@ const router = Router();
 router.post("/", checkAuth, createReview);
 router.get("/", getReviewsByOrder);
 router.get("/suggestion", getReviewSuggestion);
+router.get("/product/:productId", getReviewsByProduct);
 router.get("/:productVariantId", getReviewsByProductVariant);
 router.patch("/:id", checkAuth, updateReview);
 router.delete("/:id", checkAuth, deleteReview);
