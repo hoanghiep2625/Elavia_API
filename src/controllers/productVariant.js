@@ -5,7 +5,7 @@ import cloudinary from "../config/cloudinary.js";
 import { parseFormData } from "../utils/parseFormData.js";
 import RecentlyViewed from "../models/recentlyViewed.js";
 import ProductVariantSnapshot from "../models/productVariantSnapshot.js";
-import Order from "../models/order.js"; 
+import Order from "../models/order.js";
 import {
   productVariantSchema,
   patchProductVariantSchema,
@@ -1355,7 +1355,14 @@ export const getbestsellingProductsWomen = async (req, res) => {
       attributes = {},
       sortBy,
     } = req.query;
-    console.log("Query Params:", { page, limit, color, sizes, priceRange, attributes });
+    console.log("Query Params:", {
+      page,
+      limit,
+      color,
+      sizes,
+      priceRange,
+      attributes,
+    });
 
     // 1. Tìm category cha "Nữ"
     const womenRoot = await Category.findOne({ name: /nữ/i });
@@ -1364,7 +1371,10 @@ export const getbestsellingProductsWomen = async (req, res) => {
 
     // 2. Lấy tất cả category con
     const allCategories = await Category.find();
-    const womenCategoryIds = getAllChildCategoryIds(allCategories, womenRoot._id);
+    const womenCategoryIds = getAllChildCategoryIds(
+      allCategories,
+      womenRoot._id
+    );
     console.log("Women Category IDs:", womenCategoryIds);
 
     // 3. Kiểm tra sản phẩm trong danh mục "Nữ"
@@ -1379,8 +1389,8 @@ export const getbestsellingProductsWomen = async (req, res) => {
     const orders = await Order.find({
       $or: [
         { paymentStatus: "Đã thanh toán" },
-        { shippingStatus: "Đã nhận hàng" }
-      ]
+        { shippingStatus: "Đã nhận hàng" },
+      ],
     }).select("items.productVariantId");
     console.log("Orders count:", orders.length);
     const productVariantIds = new Set();
@@ -1436,7 +1446,11 @@ export const getbestsellingProductsWomen = async (req, res) => {
       priceArr = [0, 10000000];
     }
 
-    let sizesArr = sizes ? (typeof sizes === "string" ? JSON.parse(sizes) : sizes) : [];
+    let sizesArr = sizes
+      ? typeof sizes === "string"
+        ? JSON.parse(sizes)
+        : sizes
+      : [];
     let attrObj = attributes
       ? typeof attributes === "string"
         ? JSON.parse(attributes)
@@ -1522,7 +1536,14 @@ export const getbestsellingProductsMen = async (req, res) => {
       attributes = {},
       sortBy,
     } = req.query;
-    console.log("Query Params:", { page, limit, color, sizes, priceRange, attributes });
+    console.log("Query Params:", {
+      page,
+      limit,
+      color,
+      sizes,
+      priceRange,
+      attributes,
+    });
 
     const menRoot = await Category.findOne({ name: /nam/i });
     console.log("Men Root Category:", menRoot);
@@ -1542,8 +1563,8 @@ export const getbestsellingProductsMen = async (req, res) => {
     const orders = await Order.find({
       $or: [
         { paymentStatus: "Đã thanh toán" },
-        { shippingStatus: "Đã nhận hàng" }
-      ]
+        { shippingStatus: "Đã nhận hàng" },
+      ],
     }).select("items.productVariantId");
     console.log("Orders count:", orders.length);
     const productVariantIds = new Set();
@@ -1551,25 +1572,6 @@ export const getbestsellingProductsMen = async (req, res) => {
       order.items.forEach((item) => {
         if (item.productVariantId) {
           productVariantIds.add(String(item.productVariantId));
-    const products = await Product.find({
-      categoryId: { $in: menCategoryIds },
-      status: true,
-    }).select("_id");
-    const productIds = products.map((p) => p._id);
-
-    let priceArr = [];
-    if (priceRange) {
-      if (Array.isArray(priceRange)) {
-        priceArr = priceRange.map(Number);
-      } else if (typeof priceRange === "string") {
-        if (priceRange.includes(",")) {
-          priceArr = priceRange.split(",").map(Number);
-        } else {
-          try {
-            priceArr = JSON.parse(priceRange);
-          } catch {
-            priceArr = [];
-          }
         }
       });
     });
@@ -1618,7 +1620,11 @@ export const getbestsellingProductsMen = async (req, res) => {
       priceArr = [0, 10000000];
     }
 
-    let sizesArr = sizes ? (typeof sizes === "string" ? JSON.parse(sizes) : sizes) : [];
+    let sizesArr = sizes
+      ? typeof sizes === "string"
+        ? JSON.parse(sizes)
+        : sizes
+      : [];
     let attrObj = attributes
       ? typeof attributes === "string"
         ? JSON.parse(attributes)
