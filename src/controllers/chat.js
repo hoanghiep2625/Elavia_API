@@ -47,11 +47,8 @@ const generateAIResponse = async (userMessage, conversation) => {
           }),
         };
       } else {
-        // Không tìm thấy sản phẩm, tạo response chỉ có text
-        const response = await generateTextResponse(
-          userMessage,
-          intentAnalysis
-        );
+        // Không tìm thấy sản phẩm, trả về thông báo liên hệ hotline
+        const response = "Xin lỗi, tôi không tìm thấy sản phẩm phù hợp với yêu cầu của bạn. Vui lòng liên hệ Admin qua hotline 0353 608 533 để được hỗ trợ tư vấn chi tiết hơn! 📞";
         return {
           type: "text",
           content: response,
@@ -143,6 +140,7 @@ QUAN TRỌNG:
 - gender và targetGender phải giống nhau và là giới tính của người SẼ DÙNG sản phẩm
 - Phân tích context "cho ai" để xác định đúng gender
 - Chỉ trả về JSON, không thêm text khác!
+- Nếu không tìm thấy sản phẩm phù hợp thì trả về không có sản phẩm phù hợp thì bạn hãy liên hệ với Admin qua hotline 0353 608 533.
 `;
 
     const result = await model.generateContent(prompt);
@@ -505,9 +503,62 @@ const findDeepestMatchingCategory = async (analysis) => {
     
     let foundCategories = [];
     
-    // BƯỚC 1: Tìm theo specific type trước (cao nhất)
-    if (analysis.specificType) {
-      console.log(`🎯 Searching for specific type: ${analysis.specificType}`);
+    // BƯỚC 0: Tìm trong gender hierarchy trước nếu có gender
+    if (analysis.gender) {
+      console.log(`🚻 First, finding gender root categories for: ${analysis.gender}`);
+      
+      // Tìm gender root categories
+      const genderRootCategories = await Category.find({
+        $or: [
+          { name: /^(nam|nữ|unisex|men|women)$/i, level: 1 },
+          { level: 1, name: { $in: ['Nam', 'Nữ', 'Unisex', 'Men', 'Women'] } }
+        ]
+      });
+      
+      // Filter theo gender cụ thể
+      const targetGenderCategories = genderRootCategories.filter(cat => 
+        cat.name.toLowerCase().includes(analysis.gender.toLowerCase())
+      );
+      
+      console.log(`🎯 Found ${targetGenderCategories.length} root gender categories:`);
+      targetGenderCategories.forEach(cat => {
+        console.log(`  👤 "${cat.name}" (Level: ${cat.level})`);
+      });
+      
+      if (targetGenderCategories.length > 0) {
+        // Tìm trong gender hierarchy trước
+        if (analysis.subCategory) {
+          console.log(`🔍 Searching for sub category "${analysis.subCategory}" within gender hierarchy`);
+          const genderSubCategories = await findCategoriesInHierarchy(targetGenderCategories, analysis.subCategory);
+          
+          if (genderSubCategories.length > 0) {
+            foundCategories = genderSubCategories;
+            console.log(`✅ Found ${genderSubCategories.length} sub categories in gender hierarchy`);
+          }
+        }
+        
+        // Nếu chưa tìm thấy, tìm theo main category trong gender hierarchy
+        if (foundCategories.length === 0 && analysis.mainCategory) {
+          console.log(`📂 Searching for main category "${analysis.mainCategory}" within gender hierarchy`);
+          const genderMainCategories = await findCategoriesInHierarchy(targetGenderCategories, analysis.mainCategory);
+          
+          if (genderMainCategories.length > 0) {
+            foundCategories = genderMainCategories;
+            console.log(`✅ Found ${genderMainCategories.length} main categories in gender hierarchy`);
+          }
+        }
+        
+        if (foundCategories.length > 0) {
+          console.log(`🎯 Found categories in gender hierarchy, skipping global search`);
+        } else {
+          console.log(`🔄 No categories found in gender hierarchy, falling back to global search`);
+        }
+      }
+    }
+    
+    // BƯỚC 1: Tìm theo specific type trước (cao nhất) - chỉ khi chưa tìm thấy trong gender hierarchy
+    if (foundCategories.length === 0 && analysis.specificType) {
+      console.log(`🎯 Global search for specific type: ${analysis.specificType}`);
       
       const specificCategories = await Category.find({
         name: { $regex: new RegExp(analysis.specificType, 'i') }
@@ -517,14 +568,14 @@ const findDeepestMatchingCategory = async (analysis) => {
         foundCategories = specificCategories;
         console.log(`✅ Found ${specificCategories.length} categories for specific type`);
         specificCategories.forEach(cat => {
-          console.log(`  � "${cat.name}" (Level: ${cat.level}, Parent: ${cat.parentId?.name || 'None'})`);
+          console.log(`  📁 "${cat.name}" (Level: ${cat.level}, Parent: ${cat.parentId?.name || 'None'})`);
         });
       }
     }
     
-    // BƯỚC 2: Nếu không có specific type, tìm theo sub category
+    // BƯỚC 2: Nếu không có specific type, tìm theo sub category - global search
     if (foundCategories.length === 0 && analysis.subCategory) {
-      console.log(`� Searching for sub category: ${analysis.subCategory}`);
+      console.log(`📁 Global search for sub category: ${analysis.subCategory}`);
       
       const subCategories = await Category.find({
         name: { $regex: new RegExp(analysis.subCategory, 'i') }
@@ -657,6 +708,80 @@ const findRootParent = async (category) => {
   } catch (error) {
     console.error('❌ Find root parent error:', error);
     return null;
+  }
+};
+
+// Helper function để tìm categories trong gender hierarchy
+const findCategoriesInHierarchy = async (rootCategories, searchTerm) => {
+  try {
+    console.log(`🔍 Searching for "${searchTerm}" in ${rootCategories.length} gender hierarchies`);
+    const allCategories = [];
+    
+    for (const rootCategory of rootCategories) {
+      console.log(`📂 Searching in "${rootCategory.name}" hierarchy...`);
+      
+      // Tìm TẤT CẢ categories thuộc hierarchy này (đệ quy)
+      const allHierarchyCategories = await getAllCategoriesInHierarchy(rootCategory._id);
+      console.log(`  📋 Found ${allHierarchyCategories.length} categories in "${rootCategory.name}" hierarchy`);
+      
+      // Filter categories có tên match với search term
+      const matchingCategories = allHierarchyCategories.filter(cat => {
+        const catName = cat.name.toLowerCase();
+        const searchLower = searchTerm.toLowerCase();
+        
+        // Kiểm tra nhiều pattern matching
+        const directMatch = catName.includes(searchLower);
+        const reverseMatch = catName.includes(searchLower.replace('jean', 'jeans')) || 
+                            catName.includes(searchLower.replace('jeans', 'jean'));
+        const partialMatch = searchLower.includes('jean') && catName.includes('jean');
+        
+        return directMatch || reverseMatch || partialMatch;
+      });
+      
+      if (matchingCategories.length > 0) {
+        console.log(`  ✅ Found ${matchingCategories.length} matching categories in "${rootCategory.name}" hierarchy:`);
+        matchingCategories.forEach(cat => {
+          console.log(`    📁 "${cat.name}" (Level: ${cat.level})`);
+        });
+        allCategories.push(...matchingCategories);
+      } else {
+        console.log(`  ❌ No matching categories found in "${rootCategory.name}" hierarchy`);
+      }
+    }
+    
+    return allCategories;
+  } catch (error) {
+    console.error('❌ Error finding categories in hierarchy:', error);
+    return [];
+  }
+};
+
+// Helper function để lấy TẤT CẢ categories trong một hierarchy (đệ quy)
+const getAllCategoriesInHierarchy = async (rootCategoryId, visitedIds = new Set()) => {
+  try {
+    // Tránh infinite loop
+    if (visitedIds.has(rootCategoryId.toString())) {
+      return [];
+    }
+    visitedIds.add(rootCategoryId.toString());
+    
+    // Tìm tất cả categories con trực tiếp
+    const directChildren = await Category.find({
+      parentId: rootCategoryId
+    }).populate('parentId', 'name level');
+    
+    let allCategories = [...directChildren];
+    
+    // Đệ quy tìm categories con của mỗi child
+    for (const child of directChildren) {
+      const grandChildren = await getAllCategoriesInHierarchy(child._id, visitedIds);
+      allCategories.push(...grandChildren);
+    }
+    
+    return allCategories;
+  } catch (error) {
+    console.error('❌ Error getting all categories in hierarchy:', error);
+    return [];
   }
 };
 
@@ -802,7 +927,7 @@ const generateProductResponse = async (intentAnalysis, product, originalMessage)
     
     // Tạo text response bằng AI
     const textPrompt = `
-Bạn là AI tư vấn bán hàng thời trang chuyên nghiệp của Elavia Store.
+Bạn là AI tư vấn bán hàng thời trang chuyên nghiệp của Elavia.
 Khách hàng vừa hỏi: "${originalMessage}"
 Tôi đã tìm được sản phẩm phù hợp: "${productName}" - màu ${productColor}
 
@@ -856,13 +981,13 @@ Không đề cập đến giá cụ thể, chỉ tập trung vào chất lượn
 const generateTextResponse = async (userMessage, intentAnalysis) => {
   try {
     const prompt = `
-Bạn là AI tư vấn viên bán hàng thời trang của Elavia Store tại Việt Nam.
+Bạn là AI tư vấn viên bán hàng thời trang của Elavia tại Việt Nam.
 Khách hàng vừa hỏi: "${userMessage}"
 
 Intent được phân tích: ${intentAnalysis.intent}
 
-Thông tin về store:
-- Tên: Elavia Store  
+Thông tin về Elavia:
+- Tên: Elavia
 - Chuyên: Thời trang nam nữ cao cấp
 - Giao hàng: Toàn quốc 2-5 ngày, miễn phí ship đơn >500k
 - Đổi trả: 30 ngày, miễn phí đổi size lần đầu trong 7 ngày
@@ -887,7 +1012,7 @@ Trả lời bằng tiếng Việt:
     
   } catch (error) {
     console.error('❌ Text response generation error:', error);
-    return "Xin chào! Tôi là AI tư vấn của Elavia Store. Tôi có thể giúp bạn tìm kiếm sản phẩm, tư vấn size và trả lời các câu hỏi về chính sách. Bạn cần hỗ trợ gì ạ? 😊";
+    return "Xin chào! Tôi là AI tư vấn của Elavia. Tôi có thể giúp bạn tìm kiếm sản phẩm, tư vấn size và trả lời các câu hỏi về chính sách. Nếu cần hỗ trợ chi tiết hơn, vui lòng liên hệ Admin qua hotline 0353 608 533! 😊";
   }
 };
 
@@ -899,7 +1024,7 @@ const generateFallbackResponse = async (userMessage) => {
   if (message.includes("xin chào") || message.includes("hello") || message.includes("hi")) {
     return {
       type: "text",
-      content: "Xin chào! Tôi là AI tư vấn của Elavia Store. Tôi có thể giúp bạn tìm kiếm sản phẩm và trả lời các câu hỏi. Bạn cần hỗ trợ gì ạ? 😊"
+      content: "Xin chào! Tôi là AI tư vấn của Elavia. Tôi có thể giúp bạn tìm kiếm sản phẩm và trả lời các câu hỏi. Bạn cần hỗ trợ gì ạ? 😊"
     };
   }
   
@@ -912,7 +1037,7 @@ const generateFallbackResponse = async (userMessage) => {
   
   return {
     type: "text",
-    content: "Tôi có thể giúp bạn tìm sản phẩm, tư vấn size, và trả lời câu hỏi về chính sách. Bạn muốn tôi hỗ trợ gì ạ? 😊"
+    content: "Tôi có thể giúp bạn tìm sản phẩm, tư vấn size, và trả lời câu hỏi về chính sách. Nếu cần hỗ trợ chi tiết hơn, vui lòng liên hệ Admin qua hotline 0353 608 533! 😊"
   };
 };
 

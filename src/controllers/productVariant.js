@@ -873,6 +873,7 @@ export const getProductVariantsByCategory = async (req, res) => {
     // Lấy tất cả product thuộc các category này
     const products = await Product.find({
       categoryId: { $in: categoryIds },
+      status: true,
     }).select("_id");
     const productIds = products.map((p) => p._id);
 
@@ -1090,6 +1091,7 @@ export const getNewArrivalWomen = async (req, res) => {
     // 3. Lấy productIds thuộc các category này
     const products = await Product.find({
       categoryId: { $in: womenCategoryIds },
+      status: true,
     }).select("_id");
     const productIds = products.map((p) => p._id);
 
@@ -1224,6 +1226,7 @@ export const getNewArrivalMen = async (req, res) => {
 
     const products = await Product.find({
       categoryId: { $in: menCategoryIds },
+      status: true,
     }).select("_id");
     const productIds = products.map((p) => p._id);
 
@@ -1368,6 +1371,7 @@ export const getSpringSummerCollectionWomen = async (req, res) => {
     // 3. Lấy tất cả product thuộc các category này và thuộc collection
     const products = await Product.find({
       categoryId: { $in: womenCategoryIds },
+      status
       // collection: "fall-winter-2024",   dùng nếu cần lọc theo collection trongdb
     }).select("_id");
     const productIds = products.map((p) => p._id);
@@ -1504,6 +1508,7 @@ export const getSpringSummerCollectionMen = async (req, res) => {
     // 3. Lấy tất cả product thuộc các category này và thuộc collection
     const products = await Product.find({
       categoryId: { $in: menCategoryIds },
+      status: true,
       // collection: "fall-winter-2024", dùng nếu cần lọc theo collection trongdb
     }).select("_id");
     const productIds = products.map((p) => p._id);
