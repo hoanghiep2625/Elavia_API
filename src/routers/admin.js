@@ -62,12 +62,7 @@ import {
   getStats,
   getUserStats,
   getProductStats,
-  getSalesChart,
-  getTopProducts,
-  getTopCustomers,
-  getUserGrowth,
-  getInventoryAlert,
-  getSalesBreakdown,
+  getDashboardStats,
 } from "../controllers/stats.js";
 import {
   getSiteSettings,
@@ -137,12 +132,7 @@ router.delete("/reviews/:id/reply", deleteReply);
 router.get("/stats", getStats);
 router.get("/stats/users", getUserStats);
 router.get("/stats/products", getProductStats);
-router.get("/dashboard/sales-chart", getSalesChart);
-router.get("/dashboard/top-products", getTopProducts);
-router.get("/dashboard/top-customers", getTopCustomers);
-router.get("/dashboard/user-growth", getUserGrowth);
-router.get("/dashboard/inventory-alert", getInventoryAlert);
-router.get("/dashboard/sales-breakdown", getSalesBreakdown);
+router.get("/dashboard", getDashboardStats);
 
 router.post("/attributes", createAttribute);
 router.patch("/attributes/:id", updateAttribute);
